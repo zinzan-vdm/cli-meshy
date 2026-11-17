@@ -56,6 +56,32 @@ go run ./cmd/meshy validate --mesh ./homelab
 
 The field reference is in [docs/conf/0001-mesh-yml.md](docs/conf/0001-mesh-yml.md).
 
+### Prepare a server node
+
+A fresh host holds no node user, no sudoers rule, no config directory, and no unit. `bootstrap` prints a script that creates all four:
+
+```sh
+meshy bootstrap web-1 | sudo sh
+```
+
+The command prints the script and never runs it. Read the script before you pipe it:
+
+```sh
+meshy bootstrap web-1
+```
+
+The script does five things on the host:
+
+1. It creates the user from `ssh.user`, unless the user exists.
+2. It creates `/etc/nebula/meshy-<mesh>/` with mode 0700 and gives it to the node user.
+3. It writes `/etc/sudoers.d/meshy-<mesh>` with one rule, which allows `reload` and `restart` of `nebula@meshy-<mesh>.service` and no other command. It checks the rule with `visudo` before it installs the file.
+4. It writes `/etc/systemd/system/nebula@meshy-<mesh>.service` and enables it.
+5. It runs `systemctl daemon-reload`, then restarts the unit only when it changed and was active.
+
+A second run changes nothing, so the same command repairs a node.
+
+The order for one host is `bootstrap`, then `meshy install`, then `meshy apply`. `bootstrap` refuses a user node, because a user node gets a bundle rather than a unit. The decisions behind the script are in [docs/adr/0009](docs/adr/0009-the-bootstrap-script-owns-the-host.md).
+
 ## Commands
 
 | Command | State |
@@ -69,7 +95,7 @@ The field reference is in [docs/conf/0001-mesh-yml.md](docs/conf/0001-mesh-yml.m
 | `apply` | planned |
 | `install` | planned |
 | `bundle` | planned |
-| `bootstrap` | planned |
+| `bootstrap` | works |
 | `ca rotate` | planned |
 
 `--mesh <dir>` selects the directory that holds `mesh.yml`. It defaults to the current directory.

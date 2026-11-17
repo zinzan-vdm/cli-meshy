@@ -1,6 +1,7 @@
 address
 addressing
 automation
+bootstrap
 keys
 mesh
 nebula
@@ -9,5 +10,6 @@ repository
 review
 signing
 state
+systemd
 transport
 vault
