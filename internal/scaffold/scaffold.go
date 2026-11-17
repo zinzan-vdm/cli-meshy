@@ -58,12 +58,18 @@ const codeowners = `# Owner review is the gate that mints identity. See docs/adr
 /secrets.age     @{{OWNER}}
 `
 
+// fence opens and closes the plan in a step summary. A raw string cannot hold
+// a backtick, so the template joins this constant.
+const fence = "```"
+
+// workflow is the workflow file that a mesh repository carries. The meshy
+// repository pins the CLI, writes the ssh identity from repository secrets,
+// and plans on every pull request from this repository. The plan is the
+// report, so a difference passes the job and an exit code of 2 fails it.
 const workflow = `name: meshy
 
 on:
   pull_request:
-  push:
-    branches: [main]
   schedule:
     - cron: "0 3 * * 1"
   workflow_dispatch:
@@ -71,35 +77,88 @@ on:
 permissions:
   contents: read
 
-jobs:
-  plan:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - name: Install meshy
-        run: echo "TODO install the pinned meshy release"
-      - name: Plan
-        run: meshy plan --json
+env:
+  # The CLI comes from this commit of cli-meshy. A mesh repository pins the
+  # control plane it runs, so a run cannot pick up a newer CLI by accident.
+  MESHY_CLI_REF: 3e55ece0f7293a093b47e097497b78d3e3c32269
 
-  apply:
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+jobs:
+  validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: stable
       - name: Install meshy
-        run: echo "TODO install the pinned meshy release"
-      - name: Unseal the vault
+        run: |
+          go install github.com/zinzan-vdm/cli-meshy/cmd/meshy@$MESHY_CLI_REF
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - name: Validate
+        run: meshy validate
+
+  # A pull request from a fork holds no secrets, so it cannot read a node. The
+  # scheduled run and the manual run hold them, and both report drift without
+  # a change.
+  plan:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: stable
+      - name: Install meshy
+        run: |
+          go install github.com/zinzan-vdm/cli-meshy/cmd/meshy@$MESHY_CLI_REF
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - name: Write the ssh identity
         env:
-          MESHY_SHARE_1: ${{ secrets.MESHY_SHARE_1 }}
-          MESHY_SHARE_2: ${{ secrets.MESHY_SHARE_2 }}
-          MESHY_SHARE_3: ${{ secrets.MESHY_SHARE_3 }}
-        run: meshy unlock --from-env
-      - name: Apply
-        run: meshy apply
-      - name: Lock
+          HOSTS: ${{ secrets.MESHY_KNOWN_HOSTS }}
+          KEY: ${{ secrets.MESHY_SSH_PRIVATE_KEY }}
+          MESHY_KNOWN_HOSTS: ${{ runner.temp }}/meshy/known_hosts
+          MESHY_SSH_KEY: ${{ runner.temp }}/meshy/id_ed25519
+        run: |
+          missing=""
+          if [ -z "$HOSTS" ]; then missing="MESHY_KNOWN_HOSTS"; fi
+          if [ -z "$KEY" ]; then missing="$missing MESHY_SSH_PRIVATE_KEY"; fi
+          if [ -n "$missing" ]; then
+            echo "::error::the plan needs these repository secrets: $missing"
+            exit 1
+          fi
+          mkdir -p "$(dirname "$MESHY_KNOWN_HOSTS")"
+          umask 077
+          printf '%s\n' "$HOSTS" > "$MESHY_KNOWN_HOSTS"
+          printf '%s\n' "$KEY" > "$MESHY_SSH_KEY"
+      - name: Plan
+        env:
+          MESHY_KNOWN_HOSTS: ${{ runner.temp }}/meshy/known_hosts
+          MESHY_SSH_KEY: ${{ runner.temp }}/meshy/id_ed25519
+        run: |
+          set +e
+          meshy plan --json > "$RUNNER_TEMP/plan.json"
+          code=$?
+          set -e
+          {
+            echo "## meshy plan"
+            echo
+            case "$code" in
+              0) echo "The nodes match mesh.yml. A merge changes nothing." ;;
+              1) echo "A merge changes the mesh. The plan below is the change." ;;
+              *) echo "meshy plan exited $code and produced no plan." ;;
+            esac
+            echo
+            echo '` + fence + `json'
+            cat "$RUNNER_TEMP/plan.json"
+            echo '` + fence + `'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$code" -ge 2 ]; then
+            echo "::error::meshy plan produced no plan, exit code $code"
+            exit 1
+          fi
+      - name: Remove the ssh identity
         if: always()
-        run: meshy lock
+        run: rm -rf "${{ runner.temp }}/meshy"
 `
 
 // Options holds the values that init writes into a new mesh file.
