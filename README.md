@@ -30,7 +30,7 @@ The destination enforces the rule, so a source cannot skip the check.
 
 ## Build
 
-Go 1.22 or later.
+Go 1.27.4 or later.
 
 ```sh
 go build ./...

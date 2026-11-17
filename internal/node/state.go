@@ -60,29 +60,45 @@ func ParseHash(out string) (string, error) {
 
 // ParseCert reads the certificate details from `nebula-cert print -json`.
 func ParseCert(out string) (Cert, error) {
-	var doc struct {
-		Details struct {
-			Name     string   `json:"name"`
-			Groups   []string `json:"groups"`
-			Ips      []string `json:"ips"`
-			NotAfter string   `json:"notAfter"`
-			IsCA     bool     `json:"isCA"`
-		} `json:"details"`
-		Fingerprint string `json:"fingerprint"`
+	var list []certDoc
+	if err := json.Unmarshal([]byte(out), &list); err == nil {
+		if len(list) == 0 {
+			return Cert{}, fmt.Errorf("certificate has no fingerprint")
+		}
+		return list[0].cert()
 	}
+
+	var doc certDoc
 	if err := json.Unmarshal([]byte(out), &doc); err != nil {
 		return Cert{}, fmt.Errorf("certificate is not readable: %w", err)
 	}
-	if doc.Fingerprint == "" {
+	return doc.cert()
+}
+
+// certDoc is one entry of the array that nebula-cert prints. The tool prints an
+// array of one, and older versions printed the object alone.
+type certDoc struct {
+	Details struct {
+		Name     string   `json:"name"`
+		Groups   []string `json:"groups"`
+		Ips      []string `json:"ips"`
+		NotAfter string   `json:"notAfter"`
+		IsCA     bool     `json:"isCA"`
+	} `json:"details"`
+	Fingerprint string `json:"fingerprint"`
+}
+
+func (d certDoc) cert() (Cert, error) {
+	if d.Fingerprint == "" {
 		return Cert{}, fmt.Errorf("certificate has no fingerprint")
 	}
 	return Cert{
 		Present:     true,
-		Name:        doc.Details.Name,
-		Fingerprint: doc.Fingerprint,
-		Groups:      doc.Details.Groups,
-		Addresses:   doc.Details.Ips,
-		NotAfter:    doc.Details.NotAfter,
-		IsCA:        doc.Details.IsCA,
+		Name:        d.Details.Name,
+		Fingerprint: d.Fingerprint,
+		Groups:      d.Details.Groups,
+		Addresses:   d.Details.Ips,
+		NotAfter:    d.Details.NotAfter,
+		IsCA:        d.Details.IsCA,
 	}, nil
 }

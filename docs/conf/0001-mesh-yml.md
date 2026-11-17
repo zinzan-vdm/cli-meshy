@@ -75,7 +75,7 @@ The file that describes one mesh. `meshy` reads it from `<mesh>/mesh.yml`.
 - Required: no
 - Default: `[ca-1]`
 - Source: config file
-- Description: The authorities that every node trusts.
+- Description: The authorities that every node trusts. `meshy ca init` writes this when the file does not name it.
 - Constraints: Each name must exist in the vault. A node accepts several at once.
 
 ## `ca.active`
@@ -84,7 +84,7 @@ The file that describes one mesh. `meshy` reads it from `<mesh>/mesh.yml`.
 - Required: no
 - Default: `ca-1`
 - Source: config file
-- Description: The authority that signs new certificates.
+- Description: The authority that signs new certificates. `meshy ca init` writes this when the file does not name it.
 - Constraints: Must appear in `ca.trust`.
 
 ## `lighthouses`

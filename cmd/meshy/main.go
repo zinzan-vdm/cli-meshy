@@ -29,6 +29,8 @@ func run(args []string) int {
 		return cmdValidate(args[1:])
 	case "plan":
 		return cmdPlan(args[1:])
+	case "ca":
+		return cmdCA(args[1:])
 	case "unlock":
 		return cmdUnlock(args[1:])
 	case "lock":
@@ -56,6 +58,7 @@ Commands:
   init       create a mesh repository in a directory
   validate   check a mesh file and report every problem
   plan       compare a mesh file with the nodes and report every difference
+  ca         create the certificate authority of the mesh
   unlock     open the vault and write its plaintext to .meshy
   lock       remove the plaintext of the vault
   version    print the build version
