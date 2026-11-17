@@ -6,14 +6,14 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/SSSaaS/sssa-golang"
+	"github.com/zinzan-vdm/cli-meshy/internal/shamir"
 )
 
 // A share carries a label so that a person can tell five password manager entries apart.
 const sharePrefix = "meshy"
 
 func split(secret []byte) ([]string, error) {
-	parts, err := sssa.Create(Threshold, ShareCount, string(secret))
+	parts, err := shamir.Split(secret, ShareCount, Threshold)
 	if err != nil {
 		return nil, err
 	}
@@ -27,21 +27,21 @@ func split(secret []byte) ([]string, error) {
 }
 
 func combine(shares []string) ([]byte, error) {
-	parts := make([]string, 0, len(shares))
+	parts := make([][]byte, 0, len(shares))
 	for i, share := range shares {
 		part, err := parseShare(share)
 		if err != nil {
 			return nil, fmt.Errorf("share %d: %w", i+1, err)
 		}
-		parts = append(parts, string(part))
+		parts = append(parts, part)
 	}
 
-	joined, err := sssa.Combine(parts)
+	secret, err := shamir.Combine(parts)
 	if err != nil {
 		return nil, ErrWrongShares
 	}
 
-	return []byte(joined), nil
+	return secret, nil
 }
 
 func formatShare(label int, part []byte) string {

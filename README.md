@@ -79,3 +79,5 @@ The work is tracked in `.beans/`, one markdown file per ticket with YAML frontma
 ## Licence
 
 GPL-3.0.
+
+The Shamir secret sharing in `internal/shamir` comes from [HashiCorp Vault](https://github.com/hashicorp/vault/blob/v1.15.0/shamir/shamir.go) at v1.15.0, under MPL-2.0. The file keeps the upstream copyright and licence line.
