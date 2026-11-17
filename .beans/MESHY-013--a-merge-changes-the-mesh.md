@@ -8,7 +8,7 @@ tags:
     - apply
     - ssh
 created_at: 2026-11-17T19:22:37Z
-updated_at: 2026-11-17T20:54:22Z
+updated_at: 2026-11-18T00:45:00Z
 ---
 ## Overview
 
@@ -43,6 +43,28 @@ Apply never installs a binary and never changes the pinned version.
 - Every write is idempotent, so a second run changes nothing and prints no writes.
 - A node that fails does not stop the others. The exit code is 1 and the summary names the failures.
 - The certificate and key are written with mode 0600, owned by the node user.
+
+## Delivery
+
+The vertical is one pull request. Each commit carries one ticket, so a reviewer reads the change one ticket at a time.
+
+| Order | Ticket | The change |
+|---|---|---|
+| 1 | [MESHY-041](MESHY-041--a-new-node-gets-its-certificate.md) | a node with no certificate receives one |
+| 2 | [MESHY-014](MESHY-014--apply-the-config-to-a-node.md) | the config and the certificate reach the node |
+| 3 | [MESHY-015](MESHY-015--renew-a-certificate.md) | a certificate inside the window is renewed |
+| 4 | [MESHY-016](MESHY-016--remove-a-node-from-the-mesh.md) | a node that left is revoked on every node |
+| 5 | [MESHY-042](MESHY-042--apply-reports-one-line-per-node.md) | the command runs every node and reports each |
+
+The first step had no task. The epic names it, and it is the step a new mesh needs first. The last step had no task either, and without it no command runs the other four.
+
+[MESHY-027](MESHY-027--a-maintainer-prepares-a-new-node.md) is not in this pull request. It prepares a node that has never held the unit, and it is reviewable alone.
+
+### Proof
+
+The remote side is reached through one narrow interface, and the tests supply a fake that records the commands and the bytes it receives. So the vertical is proved without a node, and the suite still runs on a laptop.
+
+One test is gated on a real sshd. It is skipped unless `MESHY_TEST_SSHD` names an address, which keeps CI free of a daemon.
 
 ## Reference Material
 
