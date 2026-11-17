@@ -1,0 +1,32 @@
+pki:
+  ca: /etc/nebula/meshy-homelab/ca.crt
+  cert: /etc/nebula/meshy-homelab/horo-laptop.crt
+  key: /etc/nebula/meshy-homelab/horo-laptop.key
+  disconnect_invalid: true
+static_host_map:
+  10.42.0.1:
+    - 203.0.113.10:4242
+lighthouse:
+  am_lighthouse: false
+  hosts:
+    - 10.42.0.1
+  port: 4242
+punchy:
+  punch: true
+  respond: true
+tun:
+  dev: meshy-homelab
+firewall:
+  inbound:
+    - proto: icmp
+      group: admin
+    - port: 22
+      proto: tcp
+      group: admin
+  outbound:
+    - port: any
+      proto: any
+      host: any
+logging:
+  level: info
+  format: text
