@@ -83,7 +83,7 @@ The printed shares are the only copy. The command says so and does not write the
 
 ### Decisions
 
-- The authority is created by the pinned binary, not by an imported package. The module raises the Go floor to 1.26 and pulls gvisor, protobuf, and the Windows WireGuard driver. The tarball already carries the tool.
+- The authority is created by the pinned binary, not by an imported package. The package would require Go 1.27.3 and add 34 modules to the graph. It would also link 6.6 MB of crypto and protobuf into a CLI that is 7.4 MB. The tarball already carries the tool.
 - The lifetime goes to the tool in hours. A year is 365 days here, so twenty years is `175200h`.
 - `mesh.yml` is rewritten only when a key is missing. A complete file keeps its bytes, and a comment above the `ca` block survives the edit.
 - The vault record holds `ca-1.key`, `ca-1.crt`, and `ca-1.issued`, so `plan` can report the age of the authority without the key.
