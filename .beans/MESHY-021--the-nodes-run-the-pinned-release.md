@@ -8,7 +8,8 @@ tags:
     - install
     - binaries
 created_at: 2026-11-17T20:41:41Z
-updated_at: 2026-11-17T20:54:22Z
+updated_at: 2026-11-18T01:05:00Z
+parent: MESHY-043
 ---
 ## Overview
 

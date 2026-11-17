@@ -8,8 +8,8 @@ tags:
     - ssh
     - bootstrap
 created_at: 2026-11-17T20:41:41Z
-updated_at: 2026-11-17T20:54:22Z
-parent: MESHY-013
+updated_at: 2026-11-18T01:05:00Z
+parent: MESHY-043
 ---
 ## Overview
 
@@ -19,7 +19,7 @@ parent: MESHY-013
 
 `apply` writes configuration and reloads a unit that must already exist. The gap between a fresh server and a manageable node is four small steps, and doing them by hand produces a node that half works.
 
-Part of [MESHY-013](MESHY-013--a-merge-changes-the-mesh.md): a merge changes the mesh.
+Part of [MESHY-043](MESHY-043--a-host-becomes-a-node.md): a merge changes the mesh.
 
 ## Specification
 
