@@ -67,6 +67,10 @@ The version was held back for a bad reason. An imported package would have raise
 - The version is the current stable release, not the lowest one that works. A supported toolchain is the point of the ticket, so the newest release is the right target.
 - The four direct dependencies stay. `golang.org/x/crypto` at v0.31.0 was pinned for the old floor, and moving it is separate work with its own risk.
 
+### Findings
+
+- The toolchain grew the binary by itself. With the same dependencies, go1.22.2 builds 7.4 MB and go1.27.4 builds 9.6 MB. `go tool nm` finds 900 `fips140` symbols on the new release and none on the old one, so the standard library now carries a FIPS 140 module. ADR 0008 quotes size in its comparison table, so it records this.
+
 ### Deviations
 
 None. `gofmt`, `go vet`, and the 99 test results are the same on the new release, so no source file changed.
