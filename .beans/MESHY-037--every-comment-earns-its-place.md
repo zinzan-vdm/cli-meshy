@@ -52,6 +52,6 @@ A doc comment on an exported identifier stays, and states what the identifier ac
 
 - [ ] No comment restates the statement below it.
 - [ ] Every comment that remains satisfies one of the three conditions.
-- [ ] Every exported identifier keeps a doc comment that states what it achieves.
+- [ ] No exported identifier carries a comment that restates its name, and any comment it keeps states what it achieves.
 - [ ] No behaviour changes, and `go test ./...` passes with the same tests.
 - [ ] `gofmt -l .` and `go vet ./...` report nothing.
