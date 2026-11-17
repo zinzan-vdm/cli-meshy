@@ -54,7 +54,7 @@ go run ./cmd/meshy validate --mesh ./homelab
 
 `validate` returns a non-zero exit code and one line per problem. Run it in every pull request.
 
-The field reference is in [docs/mesh-yml.md](docs/mesh-yml.md).
+The field reference is in [docs/conf/0001-mesh-yml.md](docs/conf/0001-mesh-yml.md).
 
 ## Commands
 
@@ -74,7 +74,7 @@ The field reference is in [docs/mesh-yml.md](docs/mesh-yml.md).
 
 `--mesh <dir>` selects the directory that holds `mesh.yml`. It defaults to the current directory.
 
-The work is broken down in `tickets/`. Each file carries its own type, status, and parent.
+The work is tracked in `.beans/`, one markdown file per ticket with YAML frontmatter. `beans list` shows the tree, and `beans show <id>` shows one ticket.
 
 ## Repository layout
 
@@ -86,8 +86,8 @@ CONTEXT.md           the terms of the project
 docs/adr/            one decision per file
 docs/patterns/       one rule per file
 docs/questions/      open knowledge gaps
-docs/mesh-yml.md     the field reference
-tickets/             the work, one file per ticket
+docs/conf/           the mesh.yml field reference
+.beans/              the work, one file per ticket
 ```
 
 ## Decisions
@@ -99,7 +99,8 @@ The design is recorded in `docs/adr/`. Read these first:
 - [0003](docs/adr/0003-the-repository-is-the-mesh.md): the repository is the mesh.
 - [0004](docs/adr/0004-the-pull-request-is-the-approval-gate.md): the pull request is the approval gate.
 - [0005](docs/adr/0005-the-vault-is-sealed-with-age-and-shares.md): the vault is sealed with age and Shamir shares.
-- [0006](docs/adr/0006-explicit-addresses-and-node-state.md): overlay addresses are explicit and the nodes hold the state.
+- [0006](docs/adr/0006-overlay-addresses-are-explicit.md): overlay addresses are explicit.
+- [0007](docs/adr/0007-the-nodes-hold-the-state.md): the nodes hold the state.
 
 ## Standards
 
