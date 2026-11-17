@@ -36,8 +36,8 @@ One file per ticket. An epic holds tasks. A subtask is a checklist item inside a
 | [MESHY-005](MESHY-005-open-and-close-the-vault.md) | Open and close the vault | 004 | todo |
 | [MESHY-006](MESHY-006-create-the-certificate-authority.md) | Create the certificate authority | 004 | todo |
 | [MESHY-007](MESHY-007-issue-a-certificate.md) | Issue a certificate for a node | 004 | todo |
-| [MESHY-009](MESHY-009-render-the-nebula-config.md) | Render the Nebula config for one node | 008 | todo |
-| [MESHY-010](MESHY-010-expand-rules-into-a-firewall.md) | Expand rules into a per-node firewall | 008 | todo |
+| [MESHY-009](MESHY-009-render-the-nebula-config.md) | Render the Nebula config for one node | 008 | completed |
+| [MESHY-010](MESHY-010-expand-rules-into-a-firewall.md) | Expand rules into a per-node firewall | 008 | completed |
 | [MESHY-011](MESHY-011-read-live-state-over-ssh.md) | Read live state from a server node | 008 | todo |
 | [MESHY-012](MESHY-012-report-the-plan.md) | Report the plan and its exit code | 008 | todo |
 | [MESHY-014](MESHY-014-write-config-and-reload.md) | Write config and reload a server node | 013 | todo |
@@ -49,6 +49,6 @@ One file per ticket. An epic holds tasks. A subtask is a checklist item inside a
 | [MESHY-023](MESHY-023-ci-plans-and-applies.md) | Plan on a pull request and apply on merge | 022 | todo |
 | [MESHY-025](MESHY-025-rotate-the-certificate-authority.md) | Rotate the certificate authority | 024 | todo |
 | [MESHY-027](MESHY-027-bootstrap-a-new-server-node.md) | Bootstrap a new server node | 013 | todo |
-| [MESHY-029](MESHY-029-unit-tests-for-rendering-and-rules.md) | Unit tests for the renderer and the rules | 028 | todo |
+| [MESHY-029](MESHY-029-unit-tests-for-rendering-and-rules.md) | Unit tests for the renderer and the rules | 028 | completed |
 | [MESHY-030](MESHY-030-a-fake-ssh-server.md) | A fake SSH server for the apply path | 028 | todo |
 | [MESHY-031](MESHY-031-a-container-lab.md) | A container lab that proves the mesh | 028 | draft |

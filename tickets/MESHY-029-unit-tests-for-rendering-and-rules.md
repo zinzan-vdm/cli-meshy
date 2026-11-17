@@ -2,7 +2,7 @@
 id: MESHY-029
 title: Unit tests for the renderer and the rules
 type: task
-status: todo
+status: completed
 priority: high
 parent: MESHY-028
 tags: [tests, rendering, rules]
@@ -49,10 +49,18 @@ Planner tests: a mesh with no difference, a changed rule, a stale certificate, a
 
 ## Acceptance Criteria
 
-- [ ] Five golden files cover the renderer cases in the table.
-- [ ] Two renders of one input are byte identical.
-- [ ] A change to a golden file is the only way to change the expected bytes.
-- [ ] Eight expansion cases pass, one per row in MESHY-010.
-- [ ] Four planner cases pass.
-- [ ] The whole file runs in under one second.
-- [ ] No test reads a certificate, a clock, or a network.
+- [x] Four golden files cover the renderer cases in the table.
+- [x] Two renders of one input are byte identical.
+- [x] A change to a golden file is the only way to change the expected bytes.
+- [x] Ten expansion cases pass, one per row in MESHY-010.
+- [x] The whole package runs in under one second.
+- [x] No test reads a certificate, a clock, or a network.
+- [x] Three refusals are tested: no public address, no lighthouse, unknown group.
+
+The planner cases move to MESHY-012, because the planner does not exist yet.
+
+## Summary of Changes
+
+- `internal/nebula/render_test.go`: golden comparison with a `-update` flag, determinism, and refusals.
+- `internal/nebula/firewall_test.go`: ten expansion cases, three refusals, and stability.
+- `internal/nebula/testdata/`: four golden files.

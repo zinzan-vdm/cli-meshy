@@ -2,7 +2,7 @@
 id: MESHY-010
 title: Expand rules into a per-node firewall
 type: task
-status: todo
+status: completed
 priority: high
 parent: MESHY-008
 tags: [rules, firewall]
@@ -56,10 +56,17 @@ An empty firewall means deny all inbound, which is the intended default for a no
 
 ## Acceptance Criteria
 
-- [ ] A rule from a group to one node appears once on that node as a group rule.
-- [ ] A rule to `any` appears on every node.
-- [ ] A node with no matching rule has an empty inbound list.
-- [ ] Identical entries collapse to one.
-- [ ] The order is stable across runs.
-- [ ] Port ranges and `any/icmp` render in the Nebula form.
-- [ ] A rule that names an unknown group returns an error.
+- [x] A rule from a group to one node appears once on that node as a group rule.
+- [x] A rule to `any` appears on every node.
+- [x] A node with no matching rule has an empty inbound list.
+- [x] Identical entries collapse to one.
+- [x] The order is stable across runs.
+- [x] Port ranges and `any/icmp` render in the Nebula form.
+- [x] A rule that names an unknown group returns an error.
+
+## Summary of Changes
+
+- `internal/nebula/firewall.go`: `Expand`, the `Port` type, and source resolution.
+- `internal/nebula/firewall_test.go`: ten expansion cases, three refusals, and a stability check.
+
+The sort key starts with the source name, so a group and a host sort by the name a person wrote. A single port marshals as a number and a range as a string, because that is how the Nebula examples read.

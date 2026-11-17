@@ -2,7 +2,7 @@
 id: MESHY-009
 title: Render the Nebula config for one node
 type: task
-status: todo
+status: completed
 priority: high
 parent: MESHY-008
 tags: [nebula, config, rendering]
@@ -56,10 +56,19 @@ The renderer returns an error when a lighthouse has no `public_addr`, because th
 
 ## Acceptance Criteria
 
-- [ ] Two renders of the same input are byte identical.
-- [ ] A lighthouse node gets `am_lighthouse: true` and every other node gets false.
-- [ ] `static_host_map` holds every lighthouse with its underlay address.
-- [ ] `pki.ca` holds every authority in `ca.trust`.
-- [ ] `tun.dev` equals the mesh `interface`.
-- [ ] A lighthouse without `public_addr` returns an error.
-- [ ] The rendered config parses as YAML and holds the sections in the table.
+- [x] Two renders of the same input are byte identical.
+- [x] A lighthouse node gets `am_lighthouse: true` and every other node gets false.
+- [x] `static_host_map` holds every lighthouse with its underlay address.
+- [x] `pki.ca`, `pki.cert`, and `pki.key` point into the node config directory.
+- [x] `tun.dev` equals the mesh `interface`.
+- [x] A lighthouse without `public_addr` returns an error.
+- [x] The rendered config parses as YAML and holds the sections in the table.
+- [x] Every rendered config passes `nebula -test` with the real binary.
+
+## Summary of Changes
+
+- `internal/nebula/render.go`: the document types and `Render`.
+- `internal/nebula/render_test.go`: four golden cases, determinism, and three refusals.
+- `internal/nebula/testdata/`: `lighthouse.yml`, `server.yml`, `user.yml`, `two-lighthouses.yml`.
+
+Two changes from the specification. The trust bundle is written to `ca.crt` and referenced by path, not inlined, so rotation rewrites one file. ICMP rules carry no `port` field, because Nebula warns and ignores it.
