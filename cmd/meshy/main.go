@@ -31,6 +31,8 @@ func run(args []string) int {
 		return cmdPlan(args[1:])
 	case "ca":
 		return cmdCA(args[1:])
+	case "issue":
+		return cmdIssue(args[1:])
 	case "unlock":
 		return cmdUnlock(args[1:])
 	case "lock":
@@ -59,6 +61,7 @@ Commands:
   validate   check a mesh file and report every problem
   plan       compare a mesh file with the nodes and report every difference
   ca         create the certificate authority of the mesh
+  issue      mint a certificate for a node
   unlock     open the vault and write its plaintext to .meshy
   lock       remove the plaintext of the vault
   version    print the build version
@@ -67,7 +70,7 @@ Flags:
   --mesh <dir>   directory that holds mesh.yml (default ".")
 
 Planned:
-  apply, issue, bundle, install, status, bootstrap, ca rotate
+  apply, bundle, install, status, bootstrap, ca rotate
 `)
 }
 
