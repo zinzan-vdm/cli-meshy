@@ -1,0 +1,9 @@
+# Unlocked vault and generated artefacts. Never commit these.
+.meshy/
+
+# Keys and certificates.
+*.key
+*.crt
+
+# Local overrides.
+*.local.yml
