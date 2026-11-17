@@ -18,6 +18,8 @@ A unit test proves the config we render. It cannot prove that Nebula accepts it,
 
 It does not run on a development host. Three Nebula processes with three TUN devices exhausted the memory of this repository's development environment, and a network namespace harness left stale links behind. Containers give each node its own namespace and clean up with `down -v`.
 
+Part of [MESHY-028](MESHY-028-tests-prove-the-claims.md): tests prove the claims.
+
 ## Specification
 
 ```

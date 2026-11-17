@@ -16,6 +16,8 @@ Golden file tests for the Nebula config and table tests for the rule expansion. 
 
 A wrong config is the most expensive failure in the project. It is also the easiest to test, because the renderer takes values and returns bytes. The same holds for the rule expansion, which turns a flat list into one firewall per node.
 
+Part of [MESHY-028](MESHY-028-tests-prove-the-claims.md): tests prove the claims.
+
 ## Specification
 
 Renderer tests:

@@ -19,6 +19,8 @@ A merge to `main` runs `meshy apply`, so the nodes change when the reviewed chan
 
 The pull request showed the plan. The merge is the approval, so the same workflow applies the plan without a second gate. The apply job holds the shares, which is why it runs only on the trusted branch.
 
+Part of [MESHY-022](MESHY-022-ci-runs-the-mesh.md): cI runs the mesh.
+
 ## Specification
 
 ```yaml

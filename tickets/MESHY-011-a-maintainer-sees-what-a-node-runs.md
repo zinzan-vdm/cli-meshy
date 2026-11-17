@@ -16,6 +16,8 @@ tags: [ssh, state]
 
 There is no state file, so the nodes are the state. That makes this read the foundation of `plan`, and the reason `apply` can be idempotent.
 
+Part of [MESHY-008](MESHY-008-see-what-a-merge-will-change.md): a maintainer can see what a merge will change.
+
 ## Specification
 
 One SSH connection per node, with a bound of four in flight.

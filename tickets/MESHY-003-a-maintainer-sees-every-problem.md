@@ -16,6 +16,8 @@ tags: [cli, config, validation]
 
 A mesh file can hold contradictions that only appear at apply time. Two nodes on one address, a lighthouse that is a user node, and a renewal window longer than the certificate lifetime all break a node. The validator moves those failures to the pull request, where they are cheap.
 
+Part of [MESHY-001](MESHY-001-describe-and-validate-a-mesh.md): a maintainer can describe and validate a mesh.
+
 ## Specification
 
 ```

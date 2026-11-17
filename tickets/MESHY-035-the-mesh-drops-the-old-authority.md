@@ -20,6 +20,8 @@ Trusting an authority nobody uses is a standing risk. Phase 3 closes it, and it 
 
 The key is kept, not deleted. A deleted key cannot explain a certificate that is still in a backup.
 
+Part of [MESHY-024](MESHY-024-the-trust-anchor-rotates.md): the trust anchor rotates without downtime.
+
 ## Specification
 
 ```

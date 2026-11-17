@@ -20,6 +20,8 @@ The authority key is the root of trust, and a mistake here locks every node out.
 
 Every later phase refuses to run until phase 1 is done, so a maintainer cannot start in the middle.
 
+Part of [MESHY-024](MESHY-024-the-trust-anchor-rotates.md): the trust anchor rotates without downtime.
+
 ## Specification
 
 ```

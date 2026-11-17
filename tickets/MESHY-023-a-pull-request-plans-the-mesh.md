@@ -19,6 +19,8 @@ The workflow in a mesh repository runs `meshy validate` and `meshy plan` on ever
 
 The reviewer approves the diff, not a button. That works only when the pull request shows what the diff will do to the nodes, which is the plan.
 
+Part of [MESHY-022](MESHY-022-ci-runs-the-mesh.md): cI runs the mesh.
+
 ## Specification
 
 ```yaml

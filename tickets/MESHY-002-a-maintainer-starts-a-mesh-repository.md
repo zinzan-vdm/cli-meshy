@@ -16,6 +16,8 @@ tags: [cli, scaffold]
 
 The repository is the mesh, so starting a mesh is starting a repository. The scaffold carries the defaults that the design settled. A 20 year authority, one year certificates, a 60 day renewal window, and a workflow that plans on a pull request and applies on merge.
 
+Part of [MESHY-001](MESHY-001-describe-and-validate-a-mesh.md): a maintainer can describe and validate a mesh.
+
 ## Specification
 
 ```

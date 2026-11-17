@@ -16,6 +16,8 @@ tags: [ca, keys]
 
 The authority is the root of trust for the mesh, and it must outlive the nodes. The design sets a twenty year default so that rotation is a planned event rather than an emergency. The key never leaves the vault and is never written to a node.
 
+Part of [MESHY-004](MESHY-004-the-vault-seals-and-unseals.md): the vault seals and unseals the mesh keys.
+
 ## Specification
 
 ```

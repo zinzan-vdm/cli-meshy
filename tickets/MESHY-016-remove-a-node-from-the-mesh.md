@@ -16,6 +16,8 @@ When a node leaves `mesh.yml`, `apply` removes it from every config and pushes i
 
 Removal is the case that a certificate lifetime cannot cover. A certificate lasts a year, and a stolen laptop must stop working today. Nebula does not distribute blocklists through lighthouses, so the control plane must write the blocklist to every node.
 
+Part of [MESHY-013](MESHY-013-a-merge-changes-the-mesh.md): a merge changes the mesh.
+
 ## Specification
 
 | Step | Behaviour |

@@ -16,6 +16,8 @@ An in-process SSH server with an in-memory filesystem lets the read and write pa
 
 The apply path is where a bug breaks a node. A real host is the wrong test bed for it, because the interesting cases are failures. A write that fails halfway, a unit that is missing, and a second run that must be silent are all easy to stage in memory. On a server they are painful.
 
+Part of [MESHY-028](MESHY-028-tests-prove-the-claims.md): tests prove the claims.
+
 ## Specification
 
 Harness:

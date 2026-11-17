@@ -20,6 +20,8 @@ Phase 1 added trust and changed no certificate. Phase 2 is the change itself: ev
 
 A node reloads into its new certificate on a live tunnel. That is the whole reason the rotation is three phases instead of one.
 
+Part of [MESHY-024](MESHY-024-the-trust-anchor-rotates.md): the trust anchor rotates without downtime.
+
 ## Specification
 
 ```

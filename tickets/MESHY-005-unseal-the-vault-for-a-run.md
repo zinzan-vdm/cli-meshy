@@ -16,6 +16,8 @@ tags: [vault, keys]
 
 The repository holds the authority key and every node key, so the file must be encrypted at rest. The runner is ephemeral, which makes a short-lived plaintext directory acceptable, provided the tool always removes it.
 
+Part of [MESHY-004](MESHY-004-the-vault-seals-and-unseals.md): the vault seals and unseals the mesh keys.
+
 ## Specification
 
 ```

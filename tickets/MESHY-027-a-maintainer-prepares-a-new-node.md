@@ -16,6 +16,8 @@ tags: [ssh, bootstrap]
 
 `apply` writes configuration and reloads a unit that must already exist. The gap between a fresh server and a manageable node is four small steps, and doing them by hand produces a node that half works.
 
+Part of [MESHY-013](MESHY-013-a-merge-changes-the-mesh.md): a merge changes the mesh.
+
 ## Specification
 
 ```

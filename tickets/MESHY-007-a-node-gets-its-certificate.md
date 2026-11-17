@@ -18,6 +18,8 @@ Adding a node to `mesh.yml` and merging is the approval step. Issuance is the me
 
 Issuance is idempotent: a node that already holds a valid certificate gets nothing new unless the certificate is close to expiry or `--force` is given.
 
+Part of [MESHY-004](MESHY-004-the-vault-seals-and-unseals.md): the vault seals and unseals the mesh keys.
+
 ## Specification
 
 ```

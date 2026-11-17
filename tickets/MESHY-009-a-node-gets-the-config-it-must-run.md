@@ -18,6 +18,8 @@ Every node runs one Nebula process with one config. The config is derived, never
 
 The firewall is part of that config. A rule list that never becomes per-node inbound rules leaves the node open or shut, so the expansion belongs to this deliverable.
 
+Part of [MESHY-008](MESHY-008-see-what-a-merge-will-change.md): a maintainer can see what a merge will change.
+
 ## Specification
 
 Input: the mesh, one node, and the node's certificate record. Output: a Nebula config as YAML.

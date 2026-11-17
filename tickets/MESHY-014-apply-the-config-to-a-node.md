@@ -19,6 +19,8 @@ tags: [apply, ssh, nebula]
 
 Nebula reloads its firewall and its certificates on `SIGHUP` without dropping tunnels, so a reload is cheap and safe. The write is the risky part, and it must be atomic: a half written config stops the service on the next restart.
 
+Part of [MESHY-013](MESHY-013-a-merge-changes-the-mesh.md): a merge changes the mesh.
+
 ## Specification
 
 Files on the node, under `/etc/nebula/meshy-<mesh>/`:

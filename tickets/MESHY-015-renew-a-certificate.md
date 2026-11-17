@@ -16,6 +16,8 @@ tags: [certificates, apply]
 
 Certificates last one year by default, and a repository may go months without a merge. Renewal on every apply, plus a weekly scheduled check, is the mechanism that keeps the mesh alive without a calendar reminder.
 
+Part of [MESHY-013](MESHY-013-a-merge-changes-the-mesh.md): a merge changes the mesh.
+
 ## Specification
 
 | Condition | Action |

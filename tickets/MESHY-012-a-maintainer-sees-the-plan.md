@@ -20,6 +20,8 @@ tags: [plan, cli, ci]
 
 A pull request check must fail when the mesh would change on merge, or the review is blind. The same command runs in CI and on a laptop, so the text and the JSON come from one plan.
 
+Part of [MESHY-008](MESHY-008-see-what-a-merge-will-change.md): a maintainer can see what a merge will change.
+
 ## Specification
 
 ```
