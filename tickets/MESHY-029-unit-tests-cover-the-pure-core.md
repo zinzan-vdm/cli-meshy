@@ -1,6 +1,6 @@
 ---
 id: MESHY-029
-title: Unit tests for the renderer and the rules
+title: Unit tests cover the pure core
 type: task
 status: completed
 priority: high

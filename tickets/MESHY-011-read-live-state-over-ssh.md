@@ -46,7 +46,7 @@ The result is a struct per node. A read that fails returns an error that names t
 
 - [MESHY-008](MESHY-008-see-what-a-merge-will-change.md): the parent epic.
 - [ADR 0006](../docs/adr/0006-explicit-addresses-and-node-state.md): the nodes hold the state.
-- [MESHY-014](MESHY-014-write-config-and-reload.md): the write side.
+- [MESHY-014](MESHY-014-apply-the-config-to-a-node.md): the write side.
 
 ## Acceptance Criteria
 

@@ -43,7 +43,7 @@ Rules:
 
 - [ADR 0002](../docs/adr/0002-github-actions-is-the-primary-executor.md): CI is the executor.
 - [ADR 0004](../docs/adr/0004-the-pull-request-is-the-approval-gate.md): the pull request is the gate.
-- [MESHY-023](MESHY-023-ci-plans-and-applies.md): the task.
+- [MESHY-023](MESHY-023-a-pull-request-plans-the-mesh.md): the task.
 
 ## Acceptance Criteria
 

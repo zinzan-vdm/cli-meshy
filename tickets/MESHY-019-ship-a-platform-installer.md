@@ -43,7 +43,7 @@ The installer prefers the binary beside it and downloads the pinned release only
 ## Reference Material
 
 - [MESHY-017](MESHY-017-join-without-a-terminal.md): the parent epic.
-- [MESHY-014](MESHY-014-write-config-and-reload.md): the unit name that both sides share.
+- [MESHY-014](MESHY-014-apply-the-config-to-a-node.md): the unit name that both sides share.
 
 ## Acceptance Criteria
 

@@ -1,6 +1,6 @@
 ---
 id: MESHY-005
-title: Open and close the vault
+title: Unseal the vault for a run
 type: task
 status: todo
 priority: high

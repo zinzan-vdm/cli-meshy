@@ -51,7 +51,7 @@ Assertions, in order:
 
 - [MESHY-028](MESHY-028-tests-prove-the-claims.md): the parent epic.
 - [MESHY-009](MESHY-009-render-the-nebula-config.md): the renderer the lab uses.
-- [MESHY-014](MESHY-014-write-config-and-reload.md): the reload behaviour.
+- [MESHY-014](MESHY-014-apply-the-config-to-a-node.md): the reload behaviour.
 - [docs/patterns/0001](../docs/patterns/0001-tests-need-no-root-or-network.md): why this runs only in CI.
 
 ## Acceptance Criteria

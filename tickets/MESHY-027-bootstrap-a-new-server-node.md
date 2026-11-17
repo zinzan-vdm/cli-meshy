@@ -45,7 +45,7 @@ Every step checks first, so a second run changes nothing.
 ## Reference Material
 
 - [MESHY-013](MESHY-013-a-merge-changes-the-mesh.md): the parent epic.
-- [MESHY-014](MESHY-014-write-config-and-reload.md): the write that needs the unit.
+- [MESHY-014](MESHY-014-apply-the-config-to-a-node.md): the write that needs the unit.
 - [MESHY-019](MESHY-019-ship-a-platform-installer.md): the shared unit template.
 
 ## Acceptance Criteria

@@ -1,6 +1,6 @@
 ---
 id: MESHY-014
-title: Write config and reload a server node
+title: Apply the config to a node
 type: task
 status: todo
 priority: high

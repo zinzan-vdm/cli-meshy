@@ -50,7 +50,7 @@ Cases:
 
 - [MESHY-028](MESHY-028-tests-prove-the-claims.md): the parent epic.
 - [MESHY-011](MESHY-011-read-live-state-over-ssh.md): the read path.
-- [MESHY-014](MESHY-014-write-config-and-reload.md): the write path.
+- [MESHY-014](MESHY-014-apply-the-config-to-a-node.md): the write path.
 - [docs/patterns/0001](../docs/patterns/0001-tests-need-no-root-or-network.md): no root, no network.
 
 ## Acceptance Criteria

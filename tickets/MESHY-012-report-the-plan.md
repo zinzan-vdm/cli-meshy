@@ -1,6 +1,6 @@
 ---
 id: MESHY-012
-title: Report the plan and its exit code
+title: Report the plan
 type: task
 status: todo
 priority: high
@@ -71,7 +71,7 @@ User nodes are never read. The plan reports their certificate from the vault and
 ## Reference Material
 
 - [MESHY-008](MESHY-008-see-what-a-merge-will-change.md): the parent epic.
-- [MESHY-023](MESHY-023-ci-plans-and-applies.md): the workflow that consumes the JSON.
+- [MESHY-023](MESHY-023-a-pull-request-plans-the-mesh.md): the workflow that consumes the JSON.
 
 ## Acceptance Criteria
 

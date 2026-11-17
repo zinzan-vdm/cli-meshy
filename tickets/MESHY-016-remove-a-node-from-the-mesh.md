@@ -1,6 +1,6 @@
 ---
 id: MESHY-016
-title: Revoke and blocklist a removed node
+title: Remove a node from the mesh
 type: task
 status: todo
 priority: normal
