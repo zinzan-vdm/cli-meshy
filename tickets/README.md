@@ -25,6 +25,7 @@ One file per ticket. An epic holds tasks. A subtask is a checklist item inside a
 | [MESHY-022](MESHY-022-ci-runs-the-mesh.md) | CI plans on a pull request and applies on merge. | todo |
 | [MESHY-024](MESHY-024-the-trust-anchor-rotates.md) | The trust anchor rotates without downtime. | todo |
 | [MESHY-026](MESHY-026-devices-without-nebula.md) | Devices that cannot run Nebula reach the mesh. | draft |
+| [MESHY-028](MESHY-028-tests-prove-the-claims.md) | Tests prove the claims the design rests on. | todo |
 
 ## Tasks
 
@@ -48,3 +49,6 @@ One file per ticket. An epic holds tasks. A subtask is a checklist item inside a
 | [MESHY-023](MESHY-023-ci-plans-and-applies.md) | Plan on a pull request and apply on merge | 022 | todo |
 | [MESHY-025](MESHY-025-rotate-the-certificate-authority.md) | Rotate the certificate authority | 024 | todo |
 | [MESHY-027](MESHY-027-bootstrap-a-new-server-node.md) | Bootstrap a new server node | 013 | todo |
+| [MESHY-029](MESHY-029-unit-tests-for-rendering-and-rules.md) | Unit tests for the renderer and the rules | 028 | todo |
+| [MESHY-030](MESHY-030-a-fake-ssh-server.md) | A fake SSH server for the apply path | 028 | todo |
+| [MESHY-031](MESHY-031-a-container-lab.md) | A container lab that proves the mesh | 028 | draft |

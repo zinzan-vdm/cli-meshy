@@ -84,6 +84,7 @@ internal/config/     mesh file loading, defaults, validation
 internal/scaffold/   the files that init writes
 CONTEXT.md           the terms of the project
 docs/adr/            one decision per file
+docs/patterns/       one rule per file
 docs/questions/      open knowledge gaps
 docs/mesh-yml.md     the field reference
 tickets/             the work, one file per ticket
@@ -99,6 +100,13 @@ The design is recorded in `docs/adr/`. Read these first:
 - [0004](docs/adr/0004-the-pull-request-is-the-approval-gate.md): the pull request is the approval gate.
 - [0005](docs/adr/0005-the-vault-is-sealed-with-age-and-shares.md): the vault is sealed with age and Shamir shares.
 - [0006](docs/adr/0006-explicit-addresses-and-node-state.md): overlay addresses are explicit and the nodes hold the state.
+
+## Standards
+
+`docs/patterns/` holds the rules the code must follow.
+
+- [0001](docs/patterns/0001-tests-need-no-root-or-network.md): tests need no root and no network.
+- [0002](docs/patterns/0002-renderers-are-pure.md): renderers take values and return bytes.
 
 ## Licence
 
