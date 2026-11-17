@@ -5,6 +5,9 @@ type: task
 status: todo
 priority: high
 parent: MESHY-013
+depends_on:
+  - MESHY-011
+  - MESHY-012
 tags: [apply, ssh, nebula]
 ---
 

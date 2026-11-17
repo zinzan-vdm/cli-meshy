@@ -74,7 +74,7 @@ The field reference is in [docs/mesh-yml.md](docs/mesh-yml.md).
 
 `--mesh <dir>` selects the directory that holds `mesh.yml`. It defaults to the current directory.
 
-The work is broken down in [tickets/](tickets/README.md).
+The work is broken down in `tickets/`. Each file carries its own type, status, and parent.
 
 ## Repository layout
 

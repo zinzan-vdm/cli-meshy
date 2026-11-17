@@ -5,6 +5,9 @@ type: task
 status: todo
 priority: high
 parent: MESHY-022
+depends_on:
+  - MESHY-005
+  - MESHY-012
 tags: [ci, automation]
 ---
 

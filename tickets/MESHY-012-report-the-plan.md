@@ -5,6 +5,10 @@ type: task
 status: todo
 priority: high
 parent: MESHY-008
+depends_on:
+  - MESHY-009
+  - MESHY-010
+  - MESHY-011
 tags: [plan, cli, ci]
 ---
 
