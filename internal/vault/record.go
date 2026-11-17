@@ -49,6 +49,8 @@ func checkName(name string) error {
 	switch {
 	case name == "" || name == "." || name == "..":
 		return fmt.Errorf("the vault holds the invalid name %q", name)
+	case name == IdentityFile:
+		return fmt.Errorf("the vault holds the reserved name %q", name)
 	case strings.ContainsAny(name, `/\`):
 		return fmt.Errorf("the vault holds the invalid name %q", name)
 	case filepath.Base(name) != name:
