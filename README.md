@@ -62,17 +62,19 @@ The field reference is in [docs/mesh-yml.md](docs/mesh-yml.md).
 |---|---|
 | `init` | works |
 | `validate` | works |
+| `ca init` | planned |
+| `unlock`, `lock` | planned |
+| `issue` | planned |
 | `plan` | next |
 | `apply` | planned |
-| `issue` | planned |
-| `bundle` | planned |
 | `install` | planned |
-| `status` | planned |
+| `bundle` | planned |
 | `bootstrap` | planned |
-| `unlock`, `lock` | planned |
 | `ca rotate` | planned |
 
 `--mesh <dir>` selects the directory that holds `mesh.yml`. It defaults to the current directory.
+
+The work is broken down in [tickets/](tickets/README.md).
 
 ## Repository layout
 
@@ -84,6 +86,7 @@ CONTEXT.md           the terms of the project
 docs/adr/            one decision per file
 docs/questions/      open knowledge gaps
 docs/mesh-yml.md     the field reference
+tickets/             the work, one file per ticket
 ```
 
 ## Decisions
