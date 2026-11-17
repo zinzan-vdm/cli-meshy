@@ -27,6 +27,8 @@ func run(args []string) int {
 		return cmdInit(args[1:])
 	case "validate":
 		return cmdValidate(args[1:])
+	case "plan":
+		return cmdPlan(args[1:])
 	case "unlock":
 		return cmdUnlock(args[1:])
 	case "lock":
@@ -53,6 +55,7 @@ Usage:
 Commands:
   init       create a mesh repository in a directory
   validate   check a mesh file and report every problem
+  plan       compare a mesh file with the nodes and report every difference
   unlock     open the vault and write its plaintext to .meshy
   lock       remove the plaintext of the vault
   version    print the build version
@@ -61,7 +64,7 @@ Flags:
   --mesh <dir>   directory that holds mesh.yml (default ".")
 
 Planned:
-  plan, apply, issue, bundle, install, status, bootstrap, ca rotate
+  apply, issue, bundle, install, status, bootstrap, ca rotate
 `)
 }
 
