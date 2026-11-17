@@ -89,3 +89,26 @@ func TestParseCertRejects(t *testing.T) {
 		t.Error("ParseCert accepted a certificate with no fingerprint")
 	}
 }
+
+// nebula-cert v1.12.0 prints an array of one, not an object. A plan against a
+// real node reads this shape.
+const certArrayJSON = `[{"curve":"CURVE25519","details":{"groups":["core"],"isCa":false,"issuer":"5af9","name":"core-1","networks":null,"notAfter":"2027-11-17T22:47:57Z","notBefore":"2026-11-17T22:47:57Z","unsafeNetworks":null},"fingerprint":"aa11bb22","publicKey":"f7c7","signature":"448a","version":2}]`
+
+func TestParseCertReadsTheArrayTheToolPrints(t *testing.T) {
+	c, err := ParseCert(certArrayJSON)
+	if err != nil {
+		t.Fatalf("ParseCert: %v", err)
+	}
+	if c.Name != "core-1" || c.Fingerprint != "aa11bb22" || c.NotAfter != "2027-11-17T22:47:57Z" {
+		t.Errorf("unexpected cert: %+v", c)
+	}
+	if len(c.Groups) != 1 || c.Groups[0] != "core" {
+		t.Errorf("groups = %v", c.Groups)
+	}
+}
+
+func TestParseCertRejectsAnEmptyArray(t *testing.T) {
+	if _, err := ParseCert("[]"); err == nil {
+		t.Error("ParseCert accepted an empty array")
+	}
+}
