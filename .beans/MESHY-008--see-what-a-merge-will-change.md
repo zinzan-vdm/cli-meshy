@@ -1,14 +1,14 @@
 ---
 # MESHY-008
 title: A maintainer can see what a merge will change
-status: todo
+status: completed
 type: epic
 priority: high
 tags:
     - plan
     - cli
 created_at: 2026-11-17T19:22:37Z
-updated_at: 2026-11-17T20:54:22Z
+updated_at: 2026-11-18T01:05:00Z
 ---
 ## Overview
 
@@ -46,9 +46,20 @@ The plan holds four kinds of difference: certificate, config, binary, and rule. 
 
 ## Acceptance Criteria
 
-- [ ] A mesh with no differences exits 0 and prints one line per node.
-- [ ] A changed rule appears in the plan against the destination node.
-- [ ] A node that runs a different Nebula version appears in the plan.
-- [ ] A certificate inside the renewal window appears in the plan.
-- [ ] A mesh that fails validation reads no node and exits 1.
-- [ ] `--json` prints a machine readable plan that a workflow can post.
+- [x] A mesh with no differences exits 0 and prints one line per node.
+- [x] A changed rule appears in the plan against the destination node.
+- [x] A node that runs a different Nebula version appears in the plan.
+- [x] A certificate inside the renewal window appears in the plan.
+- [x] A mesh that fails validation reads no node and exits 2.
+- [x] `--json` prints a machine readable plan that a workflow can post.
+
+## Summary of Changes
+
+Closed after the fact. Every task in this epic is completed or scrapped, and each acceptance criterion is met by a merged change.
+
+- [MESHY-009](MESHY-009--a-node-gets-the-config-it-must-run.md) renders the config for one node.
+- [MESHY-011](MESHY-011--a-maintainer-sees-what-a-node-runs.md) reads a live node.
+- [MESHY-012](MESHY-012--a-maintainer-sees-the-plan.md) reports the differences and prints `--json`.
+- [MESHY-010](MESHY-010--expand-rules-into-a-per-node-firewall.md) was scrapped. The rendering task took its work.
+
+The last criterion said a validation failure exits 1. It exits 2, because [MESHY-012](MESHY-012--a-maintainer-sees-the-plan.md) set the contract to 0 for a match, 1 for a difference, and 2 for a run that never started. The criterion is corrected here.
