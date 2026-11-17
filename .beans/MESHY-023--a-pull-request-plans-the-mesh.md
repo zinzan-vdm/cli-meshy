@@ -70,8 +70,8 @@ A pull request from a fork runs `validate` only. It has no secrets, so it cannot
 - `internal/scaffold/scaffold.go`: the `workflow` template holds the `validate` job and the `plan` job. The template also holds the CLI pin, the ssh identity step, the plan step, and the cleanup step. The `fence` constant closes the JSON block, because a raw string cannot hold a backtick.
 - `internal/scaffold/workflow_test.go`: 10 tests. They parse the generated workflow with `gopkg.in/yaml.v3`. They assert the triggers, the two jobs, and the fork guard. They also assert the step summary, the exit code handling, and both secrets. The last three assert the SHA pin, no secret in a `run` block, and no apply.
 - `docs/conf/0002-the-mesh-workflow.md`: the two repository secrets, the trigger table, the summary lines, and the exit codes.
-- `docs/patterns/0005-pin-every-action-to-a-commit-sha.md`: the rule and the test that enforces it.
-- `docs/patterns/0006-a-difference-is-a-report.md`: the rule and the test that enforces it.
+- `docs/patterns/0007-pin-every-action-to-a-commit-sha.md`: the rule and the test that enforces it.
+- `docs/patterns/0008-a-difference-is-a-report.md`: the rule and the test that enforces it.
 - `docs/conf/TAGS`: adds the `ci` tag.
 - `README.md`: points a maintainer at the workflow secrets.
 

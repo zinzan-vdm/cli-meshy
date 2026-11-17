@@ -53,7 +53,7 @@ The job writes the JSON of `meshy plan --json` to `$GITHUB_STEP_SUMMARY`. The re
 | 1 | A merge changes the mesh. | passes |
 | 2 | meshy plan exited 2 and produced no plan. | fails |
 
-Exit code 1 passes the job. The difference is the report that the reviewer approves, and a red check would hide it. See [0006](../patterns/0006-a-difference-is-a-report.md).
+Exit code 1 passes the job. The difference is the report that the reviewer approves, and a red check would hide it. See [0008](../patterns/0008-a-difference-is-a-report.md).
 
 ## The CLI pin
 

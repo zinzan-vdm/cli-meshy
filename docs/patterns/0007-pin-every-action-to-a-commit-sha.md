@@ -16,5 +16,5 @@ A tag can move. A mesh workflow holds secrets that reach every node, so an actio
 
 ## See also
 
-- [0006](0006-a-difference-is-a-report.md): a difference is a report.
+- [0008](0008-a-difference-is-a-report.md): a difference is a report.
 - [ADR 0002](../adr/0002-github-actions-is-the-primary-executor.md): CI is the executor.

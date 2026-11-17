@@ -18,4 +18,4 @@ The text of the summary states which of the three codes the run got.
 
 ## See also
 
-- [0005](0005-pin-every-action-to-a-commit-sha.md): pin every action to a commit SHA.
+- [0007](0007-pin-every-action-to-a-commit-sha.md): pin every action to a commit SHA.
