@@ -48,7 +48,7 @@ func Commands(m config.Mesh, n config.Node) []string {
 	}
 }
 
-// Read runs the read-only commands on one node and returns what it runs.
+// Read runs the read-only commands on one node and returns the state it finds.
 func Read(ctx context.Context, m config.Mesh, n config.Node, ex Executor) (State, error) {
 	cmds := Commands(m, n)
 

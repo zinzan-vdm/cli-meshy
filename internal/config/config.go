@@ -14,10 +14,8 @@ import (
 // FileName is the file that describes a mesh.
 const FileName = "mesh.yml"
 
-// Schema is the mesh file version this build understands.
 const Schema = 1
 
-// Kinds of node.
 const (
 	KindServer = "server"
 	KindUser   = "user"
@@ -42,7 +40,6 @@ type Nebula struct {
 	Version string `yaml:"version"`
 }
 
-// CA describes the certificate authority and its trust bundle.
 type CA struct {
 	Duration Duration `yaml:"duration"`
 	RotateAt string   `yaml:"rotate_at"`
@@ -56,7 +53,6 @@ type Lighthouse struct {
 	Port int    `yaml:"port"`
 }
 
-// Certificates holds the lifetimes of issued certificates.
 type Certificates struct {
 	Server      Duration `yaml:"server"`
 	User        Duration `yaml:"user"`
@@ -127,7 +123,7 @@ func (m *Mesh) Defaults() {
 	}
 }
 
-// Load reads a mesh file and applies the defaults.
+// Load reads mesh.yml and applies the defaults.
 func Load(dir string) (*Mesh, error) {
 	path := filepath.Join(dir, FileName)
 	body, err := os.ReadFile(path)
@@ -181,7 +177,6 @@ func (m *Mesh) Validate() []string {
 		add("cidr %q is not an IPv4 network: %v", m.CIDR, cidrErr)
 	}
 
-	// Certificate authority.
 	if m.CA.Duration.Duration <= 0 {
 		add("ca.duration must be more than zero")
 	}
@@ -206,7 +201,6 @@ func (m *Mesh) Validate() []string {
 		add("ca.active %q is not in ca.trust", m.CA.Active)
 	}
 
-	// Certificate lifetimes.
 	if m.Certificates.Server.Duration <= 0 {
 		add("certificates.server must be more than zero")
 	}
@@ -233,7 +227,6 @@ func (m *Mesh) Validate() []string {
 			m.CA.Duration, FormatDuration(longest))
 	}
 
-	// Nodes.
 	nodes := map[string]*Node{}
 	addresses := map[string]string{}
 	groups := map[string]bool{}
@@ -295,7 +288,6 @@ func (m *Mesh) Validate() []string {
 		addresses[node.IP] = node.Name
 	}
 
-	// Lighthouses.
 	if len(m.Lighthouses) == 0 {
 		add("lighthouses must name at least one node")
 	}
@@ -316,7 +308,6 @@ func (m *Mesh) Validate() []string {
 		}
 	}
 
-	// Rules.
 	for i, rule := range m.Rules {
 		where := fmt.Sprintf("rule %d (%s -> %s)", i+1, rule.From, rule.To)
 		if !m.knownEndpoint(rule.From, nodes, groups) {
@@ -349,8 +340,8 @@ func (m *Mesh) knownEndpoint(name string, nodes map[string]*Node, groups map[str
 	return groups[name]
 }
 
-// GenerateInterface makes a stable interface name from a mesh name. The name
-// is fifteen characters at most, which is the Linux limit.
+// GenerateInterface makes a stable name that fits the fifteen character limit
+// of Linux interfaces.
 func GenerateInterface(meshName string) string {
 	const prefix = "meshy-"
 	if len(meshName) <= 8 {

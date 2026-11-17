@@ -155,7 +155,6 @@ type logging struct {
 	Format string `yaml:"format"`
 }
 
-// ConfigPath returns the config path for a node in a mesh.
 func ConfigPath(meshName, nodeName string) string {
 	return strings.TrimSuffix(ConfigDir(meshName), "/") + "/config.yml"
 }

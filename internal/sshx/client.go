@@ -158,5 +158,4 @@ func asExitError(err error, target **ssh.ExitError) bool {
 	return false
 }
 
-// Close closes the connection.
 func (c *Client) Close() error { return c.client.Close() }
