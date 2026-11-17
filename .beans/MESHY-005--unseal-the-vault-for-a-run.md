@@ -1,16 +1,17 @@
 ---
 # MESHY-005
 title: Unseal the vault for a run
-status: todo
+status: completed
 type: task
 priority: high
 tags:
     - vault
     - keys
 created_at: 2026-11-17T20:31:31Z
-updated_at: 2026-11-17T20:54:22Z
+updated_at: 2026-11-17T22:04:42Z
 parent: MESHY-004
 ---
+
 ## Overview
 
 `meshy unlock` opens `secrets.age` with shares from a prompt or from the environment, and `meshy lock` removes the plaintext. A workflow can unseal, apply, and wipe without a person at a keyboard.
@@ -53,9 +54,47 @@ meshy lock [--mesh <dir>]
 
 ## Acceptance Criteria
 
-- [ ] Three shares open the vault and two fail with exit 1.
-- [ ] `--from-env` reads shares from the environment and needs no prompt.
-- [ ] `lock` removes `.meshy/` and every file under it.
-- [ ] A second `unlock` without `--force` refuses.
-- [ ] The plaintext directory and its files have modes 0700 and 0600.
-- [ ] A test seals a vault, opens it with three shares, and compares the payload.
+- [x] Three shares open the vault and two fail with exit 1.
+- [x] `--from-env` reads shares from the environment and needs no prompt.
+- [x] `lock` removes `.meshy/` and every file under it.
+- [x] A second `unlock` without `--force` refuses.
+- [x] The plaintext directory and its files have modes 0700 and 0600.
+- [x] A test seals a vault, opens it with three shares, and compares the payload.
+
+## Summary of Changes
+
+`meshy unlock` opens `secrets.age` with three of five shares and writes the plaintext to `<mesh>/.meshy/`. `meshy lock` removes that directory. Shares come from a hidden prompt or from `MESHY_SHARE_1` to `MESHY_SHARE_5`.
+
+### Files
+
+- `internal/vault/vault.go`: `Seal`, `Open`, `Unlock`, `Lock`, and the vault constants.
+- `internal/vault/share.go`: the Shamir split and combine, and the `meshy-<label>-<base64>` share format.
+- `internal/vault/record.go`: `Record`, `Encode`, and `Decode`. One record entry becomes one file.
+- `internal/vault/vault_test.go`: 14 tests of the vault.
+- `cmd/meshy/vault.go`: `cmdUnlock`, `cmdLock`, and the two share sources.
+- `cmd/meshy/vault_test.go`: 4 tests of the commands.
+- `cmd/meshy/main.go`: the dispatch of `unlock` and `lock`, and the usage text.
+- `go.mod`, `go.sum`: the dependencies below.
+
+### Dependencies
+
+| Module | Version | Why |
+|---|---|---|
+| `filippo.io/age` | v1.2.1 | the sealed file |
+| `github.com/SSSaaS/sssa-golang` | v0.0.0-20170502204618 | the Shamir split and combine |
+| `golang.org/x/term` | v0.27.0 | a hidden prompt, so a share does not echo |
+
+The go directive stays at 1.22. `go mod tidy` also removed the `// indirect` mark from `golang.org/x/crypto`, because `internal/sshx` imports it.
+
+The first draft used `github.com/hashicorp/vault/shamir`. That package pulls 514 modules into the build for one function. The swap to a small library brings the graph to 14. The library has no release since 2017, so the alternative is to vendor the MIT licensed shamir file from the vault module. That choice is open.
+
+### Decisions
+
+- The Shamir secret is the age X25519 identity string. Three shares rebuild the identity, and the identity unwraps the file key of `secrets.age`.
+- The share label is the position in the set of five. The Shamir x-coordinate stays inside the share. A person can move a share between password manager entries and it still works.
+- Shares that are well formed but do not open the vault report `the shares do not open this vault`. A share that is not in the `meshy` format reports `share N: "..." is not a meshy share`.
+- An empty `.meshy/` directory does not block `unlock`, because it holds no plaintext.
+
+### Deviations
+
+None from the specification.
