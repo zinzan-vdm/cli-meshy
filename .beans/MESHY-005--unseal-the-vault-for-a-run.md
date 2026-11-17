@@ -81,10 +81,12 @@ meshy lock [--mesh <dir>]
 | Module | Version | Why |
 |---|---|---|
 | `filippo.io/age` | v1.2.1 | the sealed file |
-| `github.com/hashicorp/vault` | v1.15.0 | the `shamir` package, standard library only |
+| `github.com/SSSaaS/sssa-golang` | v0.0.0-20170502204618 | the Shamir split and combine |
 | `golang.org/x/term` | v0.27.0 | a hidden prompt, so a share does not echo |
 
 The go directive stays at 1.22. `go mod tidy` also removed the `// indirect` mark from `golang.org/x/crypto`, because `internal/sshx` imports it.
+
+The first draft used `github.com/hashicorp/vault/shamir`. That package pulls 514 modules into the build for one function. The swap to a small library brings the graph to 14. The library has no release since 2017, so the alternative is to vendor the MIT licensed shamir file from the vault module. That choice is open.
 
 ### Decisions
 
