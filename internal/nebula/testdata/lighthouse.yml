@@ -1,0 +1,31 @@
+pki:
+  ca: /etc/nebula/meshy-homelab/ca.crt
+  cert: /etc/nebula/meshy-homelab/core-1.crt
+  key: /etc/nebula/meshy-homelab/core-1.key
+  disconnect_invalid: true
+lighthouse:
+  am_lighthouse: true
+  hosts: []
+  port: 4242
+listen:
+  host: 0.0.0.0
+  port: 4242
+punchy:
+  punch: true
+  respond: true
+tun:
+  dev: meshy-homelab
+firewall:
+  inbound:
+    - proto: icmp
+      group: admin
+    - port: 22
+      proto: tcp
+      group: admin
+  outbound:
+    - port: any
+      proto: any
+      host: any
+logging:
+  level: info
+  format: text

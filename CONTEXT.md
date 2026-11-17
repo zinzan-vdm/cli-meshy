@@ -63,3 +63,11 @@ _Avoid_: deploy, update, upgrade
 **Interface**:
 The TUN device name on a node. It is at most fifteen characters.
 _Avoid_: tun, device, adapter
+
+**Address**:
+The overlay IP a node holds inside a mesh. It is written in the mesh file.
+_Avoid_: IP, tunnel IP, node IP
+
+**Review**:
+The human approval of a pull request before the merge reaches the nodes.
+_Avoid_: sign-off, approval, check

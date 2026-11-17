@@ -14,7 +14,7 @@ A pure renderer is testable with a string comparison, and the same bytes can be 
 
 ## Examples
 
-Good: `Render(mesh, node, record, now) ([]byte, error)`.
+Good: `Render(mesh, node) ([]byte, error)`.
 
 Bad: a renderer that reads `/etc/nebula/config.yml` to fill in a missing value.
 

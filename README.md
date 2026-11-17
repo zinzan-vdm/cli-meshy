@@ -1,6 +1,6 @@
 # cli-meshy
 
-`meshy` builds and maintains private overlay networks. One git repository describes one mesh. A pull request plans the change, a merge applies it, and a GitHub Actions runner does the work. `meshy` also runs locally with the same code path.
+`meshy` builds and maintains private overlay networks on top of Nebula. One git repository describes one mesh. A pull request plans the change, a merge applies it, and a GitHub Actions runner does the work. `meshy` also runs locally with the same code path.
 
 Status: pre-alpha. `init` and `validate` work. Nothing touches a node yet.
 
@@ -54,7 +54,7 @@ go run ./cmd/meshy validate --mesh ./homelab
 
 `validate` returns a non-zero exit code and one line per problem. Run it in every pull request.
 
-The field reference is in [docs/mesh-yml.md](docs/mesh-yml.md).
+The field reference is in [docs/conf/0001-mesh-yml.md](docs/conf/0001-mesh-yml.md).
 
 ## Commands
 
@@ -74,40 +74,8 @@ The field reference is in [docs/mesh-yml.md](docs/mesh-yml.md).
 
 `--mesh <dir>` selects the directory that holds `mesh.yml`. It defaults to the current directory.
 
-The work is broken down in [tickets/](tickets/README.md).
-
-## Repository layout
-
-```
-cmd/meshy/           the command
-internal/config/     mesh file loading, defaults, validation
-internal/scaffold/   the files that init writes
-CONTEXT.md           the terms of the project
-docs/adr/            one decision per file
-docs/patterns/       one rule per file
-docs/questions/      open knowledge gaps
-docs/mesh-yml.md     the field reference
-tickets/             the work, one file per ticket
-```
-
-## Decisions
-
-The design is recorded in `docs/adr/`. Read these first:
-
-- [0001](docs/adr/0001-nebula-is-the-data-plane.md): Nebula is the data plane, cli-meshy is the control plane.
-- [0002](docs/adr/0002-github-actions-is-the-primary-executor.md): GitHub Actions is the primary executor.
-- [0003](docs/adr/0003-the-repository-is-the-mesh.md): the repository is the mesh.
-- [0004](docs/adr/0004-the-pull-request-is-the-approval-gate.md): the pull request is the approval gate.
-- [0005](docs/adr/0005-the-vault-is-sealed-with-age-and-shares.md): the vault is sealed with age and Shamir shares.
-- [0006](docs/adr/0006-explicit-addresses-and-node-state.md): overlay addresses are explicit and the nodes hold the state.
-
-## Standards
-
-`docs/patterns/` holds the rules the code must follow.
-
-- [0001](docs/patterns/0001-tests-need-no-root-or-network.md): tests need no root and no network.
-- [0002](docs/patterns/0002-renderers-are-pure.md): renderers take values and return bytes.
+The work is tracked in `.beans/`, one markdown file per ticket with YAML frontmatter. `beans list` shows the tree, and `beans show <id>` shows one ticket.
 
 ## Licence
 
-GPL-3.0. The Nebula dependency is MIT, which is compatible.
+GPL-3.0.
