@@ -26,7 +26,7 @@ func cmdPlan(args []string) int {
 	mesh, err := config.Load(*meshDir)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "meshy plan: %v\n", err)
-		return 1
+		return 2
 	}
 
 	problems := mesh.Validate()
@@ -35,7 +35,7 @@ func cmdPlan(args []string) int {
 		for _, problem := range problems {
 			fmt.Fprintf(os.Stderr, "  - %s\n", problem)
 		}
-		return 1
+		return 2
 	}
 
 	knownHosts := os.Getenv("MESHY_KNOWN_HOSTS")
@@ -54,7 +54,7 @@ func cmdPlan(args []string) int {
 		body, err := formatJSON(report)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "meshy plan: %v\n", err)
-			return 1
+			return 2
 		}
 		os.Stdout.Write(body)
 	} else {

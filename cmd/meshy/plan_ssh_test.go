@@ -302,8 +302,8 @@ func TestPlanReadsNoNodeWhenTheMeshIsInvalid(t *testing.T) {
 	}
 
 	out, code := capture(t, func() int { return cmdPlan([]string{"--mesh", dir}) })
-	if code != 1 {
-		t.Errorf("exit = %d, want 1", code)
+	if code != 2 {
+		t.Errorf("exit = %d, want 2", code)
 	}
 	if out != "" {
 		t.Errorf("stdout = %q, want nothing", out)

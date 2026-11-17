@@ -99,7 +99,7 @@ User nodes are never read. The plan reports their certificate from the vault and
 - `cmd/meshy/plan_ssh_test.go`: 5 tests against a local SSH server: exit 0, exit 1, JSON, an unset `MESHY_KNOWN_HOSTS`, and an invalid mesh.
 - `cmd/meshy/main.go`: the dispatch case and one usage line.
 
-Exit codes: 0 when the plan holds no difference and every node was read, 1 when the plan holds a difference or a node failed the read, 1 when the mesh file fails validation and no node is read, and 2 when `MESHY_KNOWN_HOSTS` is unset.
+Exit codes: 0 when every node matches, 1 when the plan holds a difference, and 2 when no plan could be produced. The second code covers a bad flag, a mesh file that fails validation, an unset `MESHY_KNOWN_HOSTS`, and a node that could not be read.
 
 Three changes from the specification.
 
@@ -117,6 +117,6 @@ One implementation note. A certificate can carry the mesh prefix in its address,
 |---|---|
 | 0 | every node matches the mesh file |
 | 1 | there is at least one difference |
-| 2 | the plan could not be computed: a bad flag, an unset `MESHY_KNOWN_HOSTS`, or a node that could not be read |
+| 2 | no plan could be produced: a bad flag, a mesh file that fails validation, an unset `MESHY_KNOWN_HOSTS`, or a node that could not be read |
 
-A node that cannot be read is not a difference. Giving it its own code keeps a broken read apart from a real change, so a reviewer does not read a plumbing failure as a plan.
+A node that cannot be read is not a difference. Code 2 keeps a broken read apart from a real change, so a reviewer never reads a plumbing failure as a plan.
