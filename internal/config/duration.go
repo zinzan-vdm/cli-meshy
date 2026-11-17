@@ -16,7 +16,6 @@ type Duration struct {
 	raw string
 }
 
-// UnmarshalYAML reads a duration from a mesh file.
 func (d *Duration) UnmarshalYAML(value *yaml.Node) error {
 	parsed, err := ParseDuration(value.Value)
 	if err != nil {

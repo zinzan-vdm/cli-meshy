@@ -9,22 +9,18 @@ import (
 	"github.com/zinzan-vdm/cli-meshy/internal/config"
 )
 
-// Port is one entry in a Nebula firewall rule. It is a number, a range, or
-// "any". It marshals to a number when it holds one, so the config reads the way
-// the Nebula examples do.
+// Port is one entry in a Nebula firewall rule. A number marshals as a number,
+// so the config reads the way the Nebula examples do.
 type Port struct {
 	Number int
 	Range  string
 	Any    bool
 }
 
-// NumberPort returns a single port.
 func NumberPort(n int) Port { return Port{Number: n} }
 
-// RangePort returns a range such as 8000-8100.
 func RangePort(r string) Port { return Port{Range: r} }
 
-// AnyPort returns the port that matches everything.
 func AnyPort() Port { return Port{Any: true} }
 
 // IsZero reports that the rule carries no port at all, which is the case for
@@ -124,7 +120,6 @@ func Expand(mesh config.Mesh, node config.Node) ([]Rule, error) {
 	return rules, nil
 }
 
-// destinesNode reports whether a rule destination covers this node.
 func destinesNode(to string, node config.Node, groups map[string]bool) bool {
 	if to == "any" || to == node.Name {
 		return true
@@ -137,8 +132,8 @@ type source struct {
 	group string
 }
 
-// sourceOf turns a rule source into the Nebula form. A group stays a group, a
-// node name becomes a host, and "any" becomes host: any.
+// sourceOf keeps a group as a group, turns a node name into a host, and turns
+// "any" into host: any.
 func sourceOf(mesh config.Mesh, from string) (source, error) {
 	if from == "any" {
 		return source{host: "any"}, nil
@@ -163,7 +158,7 @@ type portSpec struct {
 	proto string
 }
 
-// parsePorts reads entries such as 443/tcp, 8000-8100/tcp, and any/icmp.
+// parsePorts reads entries in the form port/proto, such as 443/tcp or any/icmp.
 func parsePorts(entries []string) ([]portSpec, error) {
 	ports := make([]portSpec, 0, len(entries))
 	for _, entry := range entries {

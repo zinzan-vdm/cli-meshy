@@ -18,7 +18,6 @@ func parseCIDR(s string) (netip.Prefix, error) {
 	return prefix.Masked(), nil
 }
 
-// parseIP reads one IPv4 address.
 func parseIP(s string) (netip.Addr, error) {
 	address, err := netip.ParseAddr(s)
 	if err != nil {

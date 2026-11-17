@@ -9,7 +9,7 @@ import (
 	"github.com/zinzan-vdm/cli-meshy/internal/config"
 )
 
-// MeshFile is the starting point that init writes.
+// meshFile is the template that init writes.
 const meshFile = `schema: 1
 
 name: {{NAME}}
