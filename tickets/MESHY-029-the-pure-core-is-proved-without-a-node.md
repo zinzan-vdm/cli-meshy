@@ -1,6 +1,6 @@
 ---
 id: MESHY-029
-title: Unit tests cover the pure core
+title: The pure core is proved without a node
 type: task
 status: completed
 priority: high
@@ -43,7 +43,7 @@ Planner tests: a mesh with no difference, a changed rule, a stale certificate, a
 ## Reference Material
 
 - [MESHY-028](MESHY-028-tests-prove-the-claims.md): the parent epic.
-- [MESHY-009](MESHY-009-render-the-nebula-config.md): the renderer.
+- [MESHY-009](MESHY-009-a-node-gets-the-config-it-must-run.md): the renderer.
 - [MESHY-010](MESHY-010-expand-rules-into-a-firewall.md): the expansion.
 - [docs/patterns/0002](../docs/patterns/0002-renderers-are-pure.md): renderers are pure.
 

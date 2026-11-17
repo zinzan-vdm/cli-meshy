@@ -2,7 +2,7 @@
 id: MESHY-019
 title: Ship a platform installer
 type: task
-status: todo
+status: scrapped
 priority: normal
 parent: MESHY-017
 tags: [bundle, installers]
@@ -54,3 +54,7 @@ The installer prefers the binary beside it and downloads the pinned release only
 - [ ] Every installer prints one line on success and a reason on failure.
 - [ ] An installer with no rights exits with a message that names the rights.
 - [ ] The macOS installer clears the quarantine attribute.
+
+## Reasons for Scrapping
+
+The installer is part of the archive a person receives, so it was one deliverable with the bundle. The work is in [MESHY-018](MESHY-018-a-person-joins-with-one-archive.md).

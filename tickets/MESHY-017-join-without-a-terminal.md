@@ -2,7 +2,7 @@
 id: MESHY-017
 title: A person joins without a terminal
 type: epic
-status: todo
+status: scrapped
 priority: normal
 tags: [bundle, user-nodes]
 ---
@@ -41,8 +41,8 @@ The archive is mode 0600 and the command prints its path. Delivery is out of ban
 
 ## Reference Material
 
-- [MESHY-019](MESHY-019-ship-a-platform-installer.md): the installers.
-- [MESHY-021](MESHY-021-install-a-pinned-release.md): the binary cache.
+- [MESHY-019](MESHY-018-a-person-joins-with-one-archive.md): the installers.
+- [MESHY-021](MESHY-021-the-nodes-run-the-pinned-release.md): the binary cache.
 - [docs/questions/0001](../docs/questions/0001-devices-without-nebula.md): phones, which are out of scope.
 
 ## Acceptance Criteria
@@ -53,3 +53,7 @@ The archive is mode 0600 and the command prints its path. Delivery is out of ban
 - [ ] `--no-binary` leaves the binary out.
 - [ ] A user node on each supported platform gets the matching binary.
 - [ ] A node that is not `kind: user` is refused with a message that says why.
+
+## Reasons for Scrapping
+
+The epic held one deliverable. An archive nobody can install does not join a mesh, so the bundle and the installer are one task. The work is in [MESHY-018](MESHY-018-a-person-joins-with-one-archive.md).

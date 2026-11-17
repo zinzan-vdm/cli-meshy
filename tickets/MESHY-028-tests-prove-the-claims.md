@@ -38,7 +38,7 @@ Tier 3 is draft. Tiers 1 and 2 are the work.
 
 - [docs/patterns/0001](../docs/patterns/0001-tests-need-no-root-or-network.md): the rule for every test file.
 - [docs/patterns/0002](../docs/patterns/0002-renderers-are-pure.md): the rule for the renderer.
-- [MESHY-009](MESHY-009-render-the-nebula-config.md): the renderer under test.
+- [MESHY-009](MESHY-009-a-node-gets-the-config-it-must-run.md): the renderer under test.
 - [MESHY-014](MESHY-014-apply-the-config-to-a-node.md): the write path under test.
 
 ## Acceptance Criteria

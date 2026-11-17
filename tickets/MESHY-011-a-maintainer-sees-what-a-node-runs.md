@@ -1,6 +1,6 @@
 ---
 id: MESHY-011
-title: Read live state from a server node
+title: A maintainer sees what a node actually runs
 type: task
 status: todo
 priority: high

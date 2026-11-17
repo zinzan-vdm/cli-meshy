@@ -1,6 +1,6 @@
 ---
 id: MESHY-031
-title: A container lab that proves the mesh
+title: A rule that is written is enforced on a live mesh
 type: task
 status: draft
 priority: deferred
@@ -50,7 +50,7 @@ Assertions, in order:
 ## Reference Material
 
 - [MESHY-028](MESHY-028-tests-prove-the-claims.md): the parent epic.
-- [MESHY-009](MESHY-009-render-the-nebula-config.md): the renderer the lab uses.
+- [MESHY-009](MESHY-009-a-node-gets-the-config-it-must-run.md): the renderer the lab uses.
 - [MESHY-014](MESHY-014-apply-the-config-to-a-node.md): the reload behaviour.
 - [docs/patterns/0001](../docs/patterns/0001-tests-need-no-root-or-network.md): why this runs only in CI.
 

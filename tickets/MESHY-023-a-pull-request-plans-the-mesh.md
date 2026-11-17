@@ -47,7 +47,7 @@ A pull request from a fork runs `validate` only. It has no secrets, so it cannot
 
 - [MESHY-022](MESHY-022-ci-runs-the-mesh.md): the parent epic.
 - [MESHY-032](MESHY-032-a-merge-applies-the-mesh.md): the apply on merge.
-- [MESHY-012](MESHY-012-report-the-plan.md): the JSON the plan prints.
+- [MESHY-012](MESHY-012-a-maintainer-sees-the-plan.md): the JSON the plan prints.
 
 ## Acceptance Criteria
 

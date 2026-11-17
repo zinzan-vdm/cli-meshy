@@ -1,6 +1,6 @@
 ---
 id: MESHY-003
-title: Validate a mesh file
+title: A maintainer sees every problem in the mesh file
 type: task
 status: completed
 priority: high

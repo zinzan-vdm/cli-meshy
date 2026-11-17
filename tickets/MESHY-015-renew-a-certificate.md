@@ -35,7 +35,7 @@ Renewal uses the authority named by `ca.active`. A user node is never renewed re
 
 ## Reference Material
 
-- [MESHY-007](MESHY-007-issue-a-certificate.md): the issuance path.
+- [MESHY-007](MESHY-007-a-node-gets-its-certificate.md): the issuance path.
 - [MESHY-013](MESHY-013-a-merge-changes-the-mesh.md): the parent epic.
 - [docs/mesh-yml.md](../docs/mesh-yml.md): the `certificates` block.
 

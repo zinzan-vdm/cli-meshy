@@ -1,10 +1,9 @@
 ---
 id: MESHY-021
-title: Install a pinned Nebula release
+title: The nodes run the pinned Nebula release
 type: task
 status: todo
 priority: normal
-parent: MESHY-020
 tags: [install, binaries]
 ---
 
@@ -46,8 +45,7 @@ meshy install [--node <name>] [--source <dir>] [--mesh <dir>]
 
 ## Reference Material
 
-- [MESHY-020](MESHY-020-binaries-match-the-pin.md): the parent epic.
-- [MESHY-018](MESHY-018-build-a-bundle.md): the bundle that reads this cache.
+- [MESHY-018](MESHY-018-a-person-joins-with-one-archive.md): the bundle that reads this cache.
 
 ## Acceptance Criteria
 

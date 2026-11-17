@@ -37,7 +37,7 @@ The removed node's certificate and key are deleted from the vault on the same ru
 ## Reference Material
 
 - [MESHY-013](MESHY-013-a-merge-changes-the-mesh.md): the parent epic.
-- [MESHY-009](MESHY-009-render-the-nebula-config.md): the config that carries the blocklist.
+- [MESHY-009](MESHY-009-a-node-gets-the-config-it-must-run.md): the config that carries the blocklist.
 - [Nebula pki reference](https://nebula.defined.net/docs/config/pki/): the blocklist.
 
 ## Acceptance Criteria

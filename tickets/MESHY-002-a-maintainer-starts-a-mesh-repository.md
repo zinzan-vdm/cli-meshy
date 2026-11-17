@@ -1,6 +1,6 @@
 ---
 id: MESHY-002
-title: Scaffold a mesh repository
+title: A maintainer starts a mesh repository
 type: task
 status: completed
 priority: high

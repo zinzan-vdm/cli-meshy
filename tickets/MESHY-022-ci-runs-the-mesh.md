@@ -1,6 +1,6 @@
 ---
 id: MESHY-022
-title: CI plans on a pull request and applies on merge
+title: CI runs the mesh
 type: epic
 status: todo
 priority: high

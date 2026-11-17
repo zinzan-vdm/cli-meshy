@@ -1,6 +1,6 @@
 ---
 id: MESHY-030
-title: A fake SSH server for the apply path
+title: A write that changes nothing touches nothing
 type: task
 status: todo
 priority: high
@@ -49,7 +49,7 @@ Cases:
 ## Reference Material
 
 - [MESHY-028](MESHY-028-tests-prove-the-claims.md): the parent epic.
-- [MESHY-011](MESHY-011-read-live-state-over-ssh.md): the read path.
+- [MESHY-011](MESHY-011-a-maintainer-sees-what-a-node-runs.md): the read path.
 - [MESHY-014](MESHY-014-apply-the-config-to-a-node.md): the write path.
 - [docs/patterns/0001](../docs/patterns/0001-tests-need-no-root-or-network.md): no root, no network.
 

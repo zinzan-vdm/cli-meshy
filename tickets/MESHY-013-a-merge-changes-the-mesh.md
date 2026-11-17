@@ -44,8 +44,8 @@ Apply never installs a binary and never changes the pinned version.
 ## Reference Material
 
 - [ADR 0002](../docs/adr/0002-github-actions-is-the-primary-executor.md): CI is the executor.
-- [MESHY-012](MESHY-012-report-the-plan.md): the read side.
-- [MESHY-021](MESHY-021-install-a-pinned-release.md): the separate command for binaries.
+- [MESHY-012](MESHY-012-a-maintainer-sees-the-plan.md): the read side.
+- [MESHY-021](MESHY-021-the-nodes-run-the-pinned-release.md): the separate command for binaries.
 
 ## Acceptance Criteria
 

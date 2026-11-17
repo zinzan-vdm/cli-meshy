@@ -1,6 +1,6 @@
 ---
 id: MESHY-007
-title: Issue a certificate for a node
+title: A node gets its certificate
 type: task
 status: todo
 priority: high
@@ -45,7 +45,7 @@ The certificate carries the node name, its `ip`, and its `groups`. The lifetime 
 ## Reference Material
 
 - [MESHY-004](MESHY-004-the-vault-seals-and-unseals.md): the parent epic.
-- [MESHY-012](MESHY-012-report-the-plan.md): the plan that reports an expiring certificate.
+- [MESHY-012](MESHY-012-a-maintainer-sees-the-plan.md): the plan that reports an expiring certificate.
 - [ADR 0004](../docs/adr/0004-the-pull-request-is-the-approval-gate.md): the review is the approval.
 
 ## Acceptance Criteria

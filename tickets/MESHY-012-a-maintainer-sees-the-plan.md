@@ -1,6 +1,6 @@
 ---
 id: MESHY-012
-title: Report the plan
+title: A maintainer sees the plan before it runs
 type: task
 status: todo
 priority: high

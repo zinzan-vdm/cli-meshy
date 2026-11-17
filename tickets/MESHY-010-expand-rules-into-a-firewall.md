@@ -2,7 +2,7 @@
 id: MESHY-010
 title: Expand rules into a per-node firewall
 type: task
-status: completed
+status: scrapped
 priority: high
 parent: MESHY-008
 tags: [rules, firewall]
@@ -51,7 +51,7 @@ An empty firewall means deny all inbound, which is the intended default for a no
 ## Reference Material
 
 - [MESHY-008](MESHY-008-see-what-a-merge-will-change.md): the parent epic.
-- [MESHY-009](MESHY-009-render-the-nebula-config.md): the renderer that consumes this output.
+- [MESHY-009](MESHY-009-a-node-gets-the-config-it-must-run.md): the renderer that consumes this output.
 - [Nebula firewall reference](https://nebula.defined.net/docs/config/firewall/): the rule fields.
 
 ## Acceptance Criteria
@@ -70,3 +70,7 @@ An empty firewall means deny all inbound, which is the intended default for a no
 - `internal/nebula/firewall_test.go`: ten expansion cases, three refusals, and a stability check.
 
 The sort key starts with the source name, so a group and a host sort by the name a person wrote. A single port marshals as a number and a range as a string, because that is how the Nebula examples read.
+
+## Reasons for Scrapping
+
+The renderer cannot produce a firewall without the expansion, so the two were one deliverable. The work is in [MESHY-009](MESHY-009-a-node-gets-the-config-it-must-run.md), and this ticket stays as a record of the split.

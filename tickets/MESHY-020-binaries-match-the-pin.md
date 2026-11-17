@@ -2,7 +2,7 @@
 id: MESHY-020
 title: Binaries on the nodes match the pin
 type: epic
-status: todo
+status: scrapped
 priority: normal
 tags: [install, binaries]
 ---
@@ -39,7 +39,7 @@ meshy install [--node <name>] [--source <dir>] [--mesh <dir>]
 
 ## Reference Material
 
-- [MESHY-021](MESHY-021-install-a-pinned-release.md): the fetch and verify.
+- [MESHY-021](MESHY-021-the-nodes-run-the-pinned-release.md): the fetch and verify.
 - [MESHY-013](MESHY-013-a-merge-changes-the-mesh.md): the apply that never installs.
 - [Nebula releases](https://github.com/slackhq/nebula/releases): the source of the archives.
 
@@ -51,3 +51,7 @@ meshy install [--node <name>] [--source <dir>] [--mesh <dir>]
 - [ ] `--source` installs from a local directory with no network.
 - [ ] `apply` never changes a binary.
 - [ ] The cache holds one directory per version and platform.
+
+## Reasons for Scrapping
+
+The epic held one deliverable, and one deliverable is a task. The work is in [MESHY-021](MESHY-021-the-nodes-run-the-pinned-release.md).

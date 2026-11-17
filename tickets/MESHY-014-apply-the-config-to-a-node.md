@@ -49,7 +49,7 @@ The unit is `nebula@meshy-<mesh>.service`, installed by `meshy bootstrap`. A mis
 ## Reference Material
 
 - [MESHY-013](MESHY-013-a-merge-changes-the-mesh.md): the parent epic.
-- [MESHY-011](MESHY-011-read-live-state-over-ssh.md): the read side.
+- [MESHY-011](MESHY-011-a-maintainer-sees-what-a-node-runs.md): the read side.
 - [MESHY-019](MESHY-019-ship-a-platform-installer.md): the unit file for user nodes.
 
 ## Acceptance Criteria

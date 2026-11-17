@@ -1,6 +1,6 @@
 ---
 id: MESHY-006
-title: Create the certificate authority
+title: The mesh has a certificate authority
 type: task
 status: todo
 priority: high

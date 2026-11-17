@@ -1,6 +1,6 @@
 ---
 id: MESHY-027
-title: Bootstrap a new server node
+title: A maintainer prepares a new server node
 type: task
 status: todo
 priority: normal
