@@ -236,9 +236,6 @@ func writeIdentity(dir string, identity *age.X25519Identity) error {
 }
 
 func writeRecord(dir string, record Record) error {
-	if err := os.RemoveAll(dir); err != nil {
-		return fmt.Errorf("clear %s: %w", dir, err)
-	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return fmt.Errorf("create %s: %w", dir, err)
 	}
@@ -253,6 +250,31 @@ func writeRecord(dir string, record Record) error {
 		path := filepath.Join(dir, name)
 		if err := os.WriteFile(path, record[name], 0o600); err != nil {
 			return fmt.Errorf("write %s: %w", path, err)
+		}
+	}
+
+	return dropStaleFiles(dir, record)
+}
+
+// dropStaleFiles removes a file that the record no longer names, so a rotated
+// key does not linger. A directory is not a record entry, and the pinned tool
+// cache lives in one, so it stays.
+func dropStaleFiles(dir string, record Record) error {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return fmt.Errorf("read %s: %w", dir, err)
+	}
+
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || name == IdentityFile {
+			continue
+		}
+		if _, ok := record[name]; ok {
+			continue
+		}
+		if err := os.Remove(filepath.Join(dir, name)); err != nil {
+			return fmt.Errorf("remove %s: %w", name, err)
 		}
 	}
 
