@@ -110,3 +110,13 @@ A node that fails the read is reported in an `error` field on the node, not as a
 The text form prints `ok` only for a node with no difference. The example in the Specification shows `core-1  ok` below a `core-1  binary` line. A node with a difference is not `ok`.
 
 One implementation note. A certificate can carry the mesh prefix in its address, such as `10.42.0.2/24`, where the file writes `10.42.0.2`. The plan drops the prefix before it compares, so a matching node is not reported as a wrong address.
+
+### Exit codes
+
+| Code | Meaning |
+|---|---|
+| 0 | every node matches the mesh file |
+| 1 | there is at least one difference |
+| 2 | the plan could not be computed: a bad flag, an unset `MESHY_KNOWN_HOSTS`, or a node that could not be read |
+
+A node that cannot be read is not a difference. Giving it its own code keeps a broken read apart from a real change, so a reviewer does not read a plumbing failure as a plan.

@@ -49,6 +49,18 @@ type Report struct {
 
 // Clean reports whether the mesh file and the nodes agree. A node that could
 // not be read is not clean, because the plan cannot say that it matches.
+// Failed reports that at least one node could not be read, so the plan is
+// incomplete.
+func (r Report) Failed() bool {
+	for _, n := range r.Nodes {
+		if n.Error != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// Clean reports that every node matches the mesh file.
 func (r Report) Clean() bool {
 	if r.Changes > 0 {
 		return false

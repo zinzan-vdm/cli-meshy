@@ -120,3 +120,24 @@ func TestReadNodeNamesTheNodeInAReadError(t *testing.T) {
 		}
 	}
 }
+
+func TestExitCodeKeepsTheThreeOutcomesApart(t *testing.T) {
+	clean := plan.Report{Mesh: "homelab", Nodes: []plan.Node{{Name: "core-1"}}}
+	if got := exitCode(clean); got != 0 {
+		t.Errorf("clean plan exit = %d, want 0", got)
+	}
+
+	differ := plan.Report{Mesh: "homelab", Changes: 1, Nodes: []plan.Node{{
+		Name:    "core-1",
+		Changes: []plan.Change{{Kind: plan.KindConfig, Detail: "differs"}},
+	}}}
+	if got := exitCode(differ); got != 1 {
+		t.Errorf("changed plan exit = %d, want 1", got)
+	}
+
+	// A node that cannot be read is not a difference, so it gets its own code.
+	failed := plan.Report{Mesh: "homelab", Nodes: []plan.Node{{Name: "core-1", Error: "read failed"}}}
+	if got := exitCode(failed); got != 2 {
+		t.Errorf("failed plan exit = %d, want 2", got)
+	}
+}

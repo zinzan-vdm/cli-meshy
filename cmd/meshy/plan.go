@@ -61,7 +61,16 @@ func cmdPlan(args []string) int {
 		fmt.Print(formatText(report))
 	}
 
-	if !report.Clean() {
+	return exitCode(report)
+}
+
+// exitCode keeps the three outcomes apart: a match, a difference, and a plan
+// that could not be computed.
+func exitCode(r plan.Report) int {
+	if r.Failed() {
+		return 2
+	}
+	if !r.Clean() {
 		return 1
 	}
 	return 0
