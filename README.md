@@ -1,0 +1,102 @@
+# cli-meshy
+
+`meshy` builds and maintains private overlay networks. One git repository describes one mesh. A pull request plans the change, a merge applies it, and a GitHub Actions runner does the work. `meshy` also runs locally with the same code path.
+
+Status: pre-alpha. `init` and `validate` work. Nothing touches a node yet.
+
+## What it does
+
+Nebula carries the traffic. Each node holds a certificate that names its address and its groups, and each node enforces its own inbound rules. `meshy` generates the certificates, generates the configuration, writes it to the nodes over SSH, and signals a reload. It also produces a single archive for people who install by hand.
+
+Access is written as a rule from a source to a destination on a port:
+
+```yaml
+rules:
+  - from: user
+    to: web-1
+    ports: ["443/tcp"]
+```
+
+The destination enforces the rule, so a source cannot skip the check.
+
+## How it works
+
+- The repository is the mesh. `mesh.yml` is the desired state. `secrets.age` is the vault.
+- Nebula is the data plane. We do not build a tunnel, a discovery service, or a packet filter.
+- GitHub Actions is the primary executor. A merge applies. A workflow can also run on a schedule.
+- The pull request is the approval gate. A review of `mesh.yml` is the moment an identity is approved.
+- `plan` reads the nodes and prints the difference. `apply` writes. Neither keeps a state file.
+- The vault holds the certificate authority key and the node keys. Five shares seal it, and any three open it.
+
+## Build
+
+Go 1.22 or later.
+
+```sh
+go build ./...
+go test ./...
+go run ./cmd/meshy version
+```
+
+## Use
+
+Create a mesh repository in an empty directory:
+
+```sh
+go run ./cmd/meshy init --name homelab --cidr 10.42.0.0/24 --owner your-handle ./homelab
+```
+
+That writes `mesh.yml`, `.gitignore`, `.github/CODEOWNERS`, and `.github/workflows/meshy.yml`. Edit the node block, then check the file:
+
+```sh
+go run ./cmd/meshy validate --mesh ./homelab
+```
+
+`validate` returns a non-zero exit code and one line per problem. Run it in every pull request.
+
+The field reference is in [docs/mesh-yml.md](docs/mesh-yml.md).
+
+## Commands
+
+| Command | State |
+|---|---|
+| `init` | works |
+| `validate` | works |
+| `plan` | next |
+| `apply` | planned |
+| `issue` | planned |
+| `bundle` | planned |
+| `install` | planned |
+| `status` | planned |
+| `bootstrap` | planned |
+| `unlock`, `lock` | planned |
+| `ca rotate` | planned |
+
+`--mesh <dir>` selects the directory that holds `mesh.yml`. It defaults to the current directory.
+
+## Repository layout
+
+```
+cmd/meshy/           the command
+internal/config/     mesh file loading, defaults, validation
+internal/scaffold/   the files that init writes
+CONTEXT.md           the terms of the project
+docs/adr/            one decision per file
+docs/questions/      open knowledge gaps
+docs/mesh-yml.md     the field reference
+```
+
+## Decisions
+
+The design is recorded in `docs/adr/`. Read these first:
+
+- [0001](docs/adr/0001-nebula-is-the-data-plane.md): Nebula is the data plane, cli-meshy is the control plane.
+- [0002](docs/adr/0002-github-actions-is-the-primary-executor.md): GitHub Actions is the primary executor.
+- [0003](docs/adr/0003-the-repository-is-the-mesh.md): the repository is the mesh.
+- [0004](docs/adr/0004-the-pull-request-is-the-approval-gate.md): the pull request is the approval gate.
+- [0005](docs/adr/0005-the-vault-is-sealed-with-age-and-shares.md): the vault is sealed with age and Shamir shares.
+- [0006](docs/adr/0006-explicit-addresses-and-node-state.md): overlay addresses are explicit and the nodes hold the state.
+
+## Licence
+
+GPL-3.0. The Nebula dependency is MIT, which is compatible.
