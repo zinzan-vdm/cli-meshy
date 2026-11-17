@@ -1,6 +1,6 @@
 module github.com/zinzan-vdm/cli-meshy
 
-go 1.22
+go 1.27.4
 
 require (
 	filippo.io/age v1.2.1

@@ -14,11 +14,11 @@ The cost of the import is weight, not the language version.
 
 | | the binary (today) | importing `nebula/cert` |
 |---|---|---|
-| go directive | 1.22 | 1.27.3 |
+| go directive | 1.27.4 | 1.27.3 |
 | modules in the graph | 13 | 47 |
 | linked code | 7.4 MB for the whole CLI | 6.6 MB for a program that only imports the package |
 
-The package links `x/crypto` (curve25519, argon2, blake2b, cryptobyte), `filippo.io/bigmod`, and `protobuf`. The floor is a patch release, so the module decides which toolchain we build with, and a bump can move it again.
+The package links `x/crypto` (curve25519, argon2, blake2b, cryptobyte), `filippo.io/bigmod`, and `protobuf`. The toolchain floor is not the reason to refuse it: this repository builds on 1.27.4, which is above the 1.27.3 the module asks for. The weight is the reason.
 
 `meshy` needs three subcommands of one tool, and the release tarball already carries that tool because `meshy install` pins it. The print form is the read path as well: `nebula-cert print -json` gives the fingerprint, the issuer, the names, the networks, and the expiry, which is everything `plan` compares.
 
