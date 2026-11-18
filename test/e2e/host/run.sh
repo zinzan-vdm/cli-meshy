@@ -186,7 +186,7 @@ printf 'ok 1 bootstrap created the user, the sudoers rule, %s and %s\n' "$DIR" "
 
 tree_before=$(tree_sum "$HOST")
 calls_before=$(calls "$HOST")
-on "root@$HOST" sh -s </work/host.sh
+on "root@$HOST" sh -s <"/work/$NODE.sh"
 tree_after=$(tree_sum "$HOST")
 calls_after=$(calls "$HOST")
 [ "$tree_before" = "$tree_after" ] || fail "the second bootstrap changed the tree"
