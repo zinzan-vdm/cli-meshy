@@ -1,0 +1,71 @@
+#!/bin/sh
+# A container has no init. This shim answers the four calls that meshy makes to
+# systemctl and it reloads the real nebula process with SIGHUP, so the scenario
+# proves a reload and not a description of one. See docs/patterns/0021.
+set -u
+
+action="${1:-}"
+unit="${2:-}"
+if [ -z "$action" ] || [ -z "$unit" ]; then
+  echo "usage: systemctl <action> <unit>" >&2
+  exit 2
+fi
+
+mesh="${unit%.service}"
+mesh="${mesh#nebula@}"
+pidfile="/run/nebula-${mesh}.pid"
+config="/etc/nebula/${mesh}/config.yml"
+logfile="/var/log/nebula-${mesh}.log"
+
+running() {
+  [ -f "$pidfile" ] || return 1
+  pid="$(cat "$pidfile")"
+  [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null
+}
+
+case "$action" in
+cat)
+  if [ ! -f "/etc/systemd/system/$unit" ]; then
+    echo "No files found for $unit." >&2
+    exit 1
+  fi
+  cat "/etc/systemd/system/$unit"
+  ;;
+is-active)
+  if running; then
+    echo active
+    exit 0
+  fi
+  echo inactive
+  exit 3
+  ;;
+reload)
+  if ! running; then
+    echo "$unit is not active" >&2
+    exit 1
+  fi
+  kill -HUP "$(cat "$pidfile")"
+  ;;
+start | restart)
+  if running; then
+    kill "$(cat "$pidfile")" 2>/dev/null || true
+    sleep 1
+  fi
+  nebula -config "$config" >"$logfile" 2>&1 &
+  echo $! >"$pidfile"
+  sleep 1
+  if ! running; then
+    echo "$unit did not start: $(tail -n 5 "$logfile" 2>/dev/null)" >&2
+    exit 1
+  fi
+  ;;
+stop)
+  if running; then
+    kill "$(cat "$pidfile")" 2>/dev/null || true
+  fi
+  ;;
+*)
+  echo "systemctl: this shim does not answer $action" >&2
+  exit 2
+  ;;
+esac

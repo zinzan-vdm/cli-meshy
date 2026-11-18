@@ -23,10 +23,14 @@ type Cert struct {
 	Present     bool
 	Name        string
 	Fingerprint string
-	Groups      []string
-	Addresses   []string
-	NotAfter    string
-	IsCA        bool
+	// Issuer is the fingerprint of the authority that signed the certificate.
+	// A rotation reads it back, because it is the proof of which authority
+	// signed the certificate that the node holds.
+	Issuer    string
+	Groups    []string
+	Addresses []string
+	NotAfter  string
+	IsCA      bool
 }
 
 var versionPattern = regexp.MustCompile(`(\d+\.\d+\.\d+)`)
@@ -105,6 +109,7 @@ func docs(list []certDoc) ([]Cert, error) {
 type certDoc struct {
 	Details struct {
 		Name     string   `json:"name"`
+		Issuer   string   `json:"issuer"`
 		Groups   []string `json:"groups"`
 		Ips      []string `json:"ips"`
 		NotAfter string   `json:"notAfter"`
@@ -121,6 +126,7 @@ func (d certDoc) cert() (Cert, error) {
 		Present:     true,
 		Name:        d.Details.Name,
 		Fingerprint: d.Fingerprint,
+		Issuer:      d.Details.Issuer,
 		Groups:      d.Details.Groups,
 		Addresses:   d.Details.Ips,
 		NotAfter:    d.Details.NotAfter,

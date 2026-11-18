@@ -54,6 +54,7 @@ func TestParseHash(t *testing.T) {
 const certJSON = `{
   "details": {
     "name": "core-1",
+    "issuer": "cc33dd44",
     "groups": ["core", "admin"],
     "ips": ["10.42.0.1/24"],
     "notAfter": "2027-11-17T20:00:00Z",
@@ -69,6 +70,9 @@ func TestParseCert(t *testing.T) {
 	}
 	if !c.Present || c.Name != "core-1" || c.Fingerprint != "aa11bb22" {
 		t.Fatalf("unexpected cert: %+v", c)
+	}
+	if c.Issuer != "cc33dd44" {
+		t.Errorf("issuer = %q, want cc33dd44", c.Issuer)
 	}
 	if len(c.Groups) != 2 || c.Groups[0] != "core" {
 		t.Errorf("groups = %v", c.Groups)

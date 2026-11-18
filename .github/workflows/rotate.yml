@@ -1,0 +1,110 @@
+name: rotate
+
+# The live rotation of MESHY-034. It needs root, /dev/net/tun, and a container
+# runtime, so it stays apart from the unit job in ci.yml. The scenario proves
+# that phase 2 replaces every certificate with no reply lost on the tunnel.
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rotate:
+    name: live rotation
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+      # The runner may hold no TUN device. Every step here is idempotent, so a
+      # runner that has one keeps it.
+      - name: Create the TUN device
+        run: sudo mkdir -p /dev/net && ([ -e /dev/net/tun ] || sudo mknod /dev/net/tun c 10 200) && sudo chmod 666 /dev/net/tun
+      - name: Read the pinned Nebula version
+        id: nebula
+        run: |
+          version="$(awk '/^[^[:space:]#]/{b=$1} b=="nebula:" && /^[[:space:]]+version:/{print $2; exit}' test/e2e/rotate/mesh.yml | tr -d '\"')"
+          if [ -z "$version" ]; then
+            echo "::error::test/e2e/rotate/mesh.yml holds no nebula.version"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      # The archive and each member that the nodes need are checked against the
+      # digests that the release publishes.
+      - name: Download and verify the pin
+        env:
+          VERSION: ${{ steps.nebula.outputs.version }}
+        run: |
+          asset="nebula-linux-amd64.tar.gz"
+          base="https://github.com/slackhq/nebula/releases/download/$VERSION"
+          curl -fsSL "$base/SHASUM256.txt" -o "$RUNNER_TEMP/SHASUM256.txt"
+          curl -fsSL "$base/$asset" -o "$RUNNER_TEMP/$asset"
+          want="$(awk -v name="$asset" '$2 == name {print $1}' "$RUNNER_TEMP/SHASUM256.txt")"
+          if [ -z "$want" ]; then
+            echo "::error::SHASUM256.txt names no $asset"
+            exit 1
+          fi
+          echo "$want  $RUNNER_TEMP/$asset" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/$asset" -C "$RUNNER_TEMP" nebula nebula-cert
+          for member in nebula nebula-cert; do
+            want="$(awk -v name="$asset/$member" '$2 == name {print $1}' "$RUNNER_TEMP/SHASUM256.txt")"
+            if [ -z "$want" ]; then
+              echo "::error::SHASUM256.txt names no $asset/$member"
+              exit 1
+            fi
+            echo "$want  $RUNNER_TEMP/$member" | sha256sum -c -
+          done
+      # The CLI and the scenario run on the runner. The image is Alpine, so both
+      # binaries must be static or the container cannot exec them.
+      - name: Build the CLI and the scenario
+        run: |
+          mkdir -p test/e2e/rotate/.build
+          CGO_ENABLED=0 go build -o test/e2e/rotate/.build/meshy ./cmd/meshy
+          CGO_ENABLED=0 go build -o test/e2e/rotate/.build/scenario ./test/e2e/rotate/scenario
+          install -m 0755 "$RUNNER_TEMP/nebula" test/e2e/rotate/.build/nebula
+          install -m 0755 "$RUNNER_TEMP/nebula-cert" test/e2e/rotate/.build/nebula-cert
+      - name: Build the node image
+        run: docker build -t meshy-rotate:local test/e2e/rotate
+      - name: Check the compose file
+        run: docker compose -f test/e2e/rotate/compose.yml config > /dev/null
+      # The key is made in the run and never comes from the repository. Each
+      # node authorizes it at start.
+      - name: Write the ssh key
+        run: |
+          ssh-keygen -t ed25519 -N "" -C meshy-e2e -f "$RUNNER_TEMP/meshy_key"
+          mkdir -p test/e2e/rotate/run
+          install -m 0644 "$RUNNER_TEMP/meshy_key.pub" test/e2e/rotate/run/authorized_key
+      - name: Start the nodes
+        run: docker compose -f test/e2e/rotate/compose.yml up -d
+      - name: Scan the host keys
+        run: |
+          for _ in $(seq 1 60); do
+            rm -f "$RUNNER_TEMP/known_hosts"
+            ssh-keyscan -p 2221 -t ed25519 127.0.0.1 >> "$RUNNER_TEMP/known_hosts" 2>/dev/null
+            ssh-keyscan -p 2222 -t ed25519 127.0.0.1 >> "$RUNNER_TEMP/known_hosts" 2>/dev/null
+            if grep -qF "[127.0.0.1]:2221" "$RUNNER_TEMP/known_hosts" && grep -qF "[127.0.0.1]:2222" "$RUNNER_TEMP/known_hosts"; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "::error::the sshd of a node did not answer"
+          docker compose -f test/e2e/rotate/compose.yml logs
+          exit 1
+      - name: Run the rotation
+        run: |
+          mkdir -p "$RUNNER_TEMP/mesh"
+          cp test/e2e/rotate/mesh.yml "$RUNNER_TEMP/mesh/mesh.yml"
+          timeout 300 ./test/e2e/rotate/.build/scenario \
+            -meshy ./test/e2e/rotate/.build/meshy \
+            -compose test/e2e/rotate/compose.yml \
+            -mesh "$RUNNER_TEMP/mesh" \
+            -key "$RUNNER_TEMP/meshy_key" \
+            -known-hosts "$RUNNER_TEMP/known_hosts" \
+            -nebula-cert "$RUNNER_TEMP/nebula-cert"
+      - name: Tear down
+        if: always()
+        run: docker compose -f test/e2e/rotate/compose.yml down -v

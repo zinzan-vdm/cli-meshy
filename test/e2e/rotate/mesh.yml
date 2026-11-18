@@ -1,0 +1,49 @@
+schema: 1
+
+name: rot
+cidr: 10.42.0.0/24
+interface: meshy-rot
+
+nebula:
+  version: v1.12.0
+
+ca:
+  duration: 20y
+  rotate_at: 80%
+  trust: [ca-1]
+  active: ca-1
+
+lighthouses:
+  - node: node-a
+    port: 4242
+
+certificates:
+  server: 1y
+  user: 1y
+  renew_before: 60d
+
+nodes:
+  - name: node-a
+    kind: server
+    groups: [core]
+    ip: 10.42.0.1
+    ssh:
+      user: meshy
+      host: 127.0.0.1
+      port: 2221
+    public_addr: node-a:4242
+
+  - name: node-b
+    kind: server
+    groups: [core]
+    ip: 10.42.0.2
+    ssh:
+      user: meshy
+      host: 127.0.0.1
+      port: 2222
+
+rules:
+  - from: core
+    to: core
+    ports:
+      - any/icmp
