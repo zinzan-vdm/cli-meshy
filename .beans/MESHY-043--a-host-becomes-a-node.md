@@ -94,7 +94,8 @@ Files:
 - `.github/workflows/host.yml`: one job. It verifies the pin, builds the binary and both images, runs the scenario under `timeout 300`, and tears down with `down -v` in an `if: always()` step.
 - `.gitignore`: ignores `test/e2e/host/.build/`.
 - `docs/patterns/0022-a-recorder-stands-in-for-systemd.md`, `docs/adr/0013-the-empty-host-run-is-its-own-scenario.md`.
-- `internal/bootstrap/bootstrap.go`: the node user holds `/bin/sh`, and the script repairs a host that holds a shell which refuses every command. `sshd` runs a remote command through the shell of the account, so `/usr/sbin/nologin` made a prepared host unreachable to `install`, `apply`, and `rotate`.
+- `internal/bootstrap/bootstrap.go`: the node user holds `/bin/sh`, and the script repairs a host that holds a shell which refuses every command.
+- `internal/bootstrap/bootstrap.go`: the script owns the home directory of the node user, so that sshd accepts the key inside it. `sshd` runs a remote command through the shell of the account, so `/usr/sbin/nologin` made a prepared host unreachable to `install`, `apply`, and `rotate`.
 - `internal/bootstrap/bootstrap_test.go`: one test holds the shell, and one test holds the repair.
 - `docs/adr/0009-the-bootstrap-script-owns-the-host.md`: the section that records the defect and the decision.
 

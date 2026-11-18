@@ -89,7 +89,9 @@ if ! id -u "$USER_NAME" >/dev/null 2>&1; then
 	# The node user runs a command over SSH, so it needs a shell that sshd will
 	# execute. A nologin shell refuses every command, and then install, apply,
 	# and rotate cannot reach a host that this script prepared. See ADR 0009.
-	useradd --create-home --shell /bin/sh "$USER_NAME"
+	# The short options are the ones that every useradd holds, including the
+	# busybox one in an Alpine image.
+	useradd -m -s /bin/sh "$USER_NAME"
 fi
 
 # A host that ran an older script holds a shell that refuses every command. The
@@ -97,8 +99,15 @@ fi
 # script again.
 SHELL_NOW="$(awk -F: -v u="$USER_NAME" '$1 == u { print $7 }' /etc/passwd)"
 if [ "$SHELL_NOW" != "/bin/sh" ]; then
-	usermod --shell /bin/sh "$USER_NAME"
+	usermod -s /bin/sh "$USER_NAME"
 fi
+
+# sshd refuses the key of the node user when another user owns the home
+# directory, so the script owns the directory that the key lives in.
+HOME_DIR="$(awk -F: -v u="$USER_NAME" '$1 == u { print $6 }' /etc/passwd)"
+mkdir -p "$HOME_DIR"
+chown "$USER_NAME:$USER_NAME" "$HOME_DIR"
+chmod 0700 "$HOME_DIR"
 
 mkdir -p "$DIR"
 chmod 0700 "$DIR"

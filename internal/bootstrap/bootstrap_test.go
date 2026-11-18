@@ -144,7 +144,7 @@ func TestScriptGivesTheNodeUserAShellThatRunsACommand(t *testing.T) {
 	if strings.Contains(line, "nologin") {
 		t.Errorf("the node user cannot run a command: %s", line)
 	}
-	if !strings.Contains(line, "--shell /bin/sh") {
+	if !strings.Contains(line, "-s /bin/sh") {
 		t.Errorf("the node user holds no shell that runs a command: %s", line)
 	}
 }
@@ -155,7 +155,7 @@ func TestScriptRepairsAShellThatRefusesEveryCommand(t *testing.T) {
 	// A host that ran an older script keeps a shell that denies every command.
 	// The user exists, so the create block is skipped, and the repair carries
 	// the host back to a shell that sshd will run.
-	if !strings.Contains(body, `usermod --shell /bin/sh "$USER_NAME"`) {
+	if !strings.Contains(body, `usermod -s /bin/sh "$USER_NAME"`) {
 		t.Error("the script does not repair the shell of a node user that already exists")
 	}
 	if !strings.Contains(body, `SHELL_NOW=`) {
@@ -163,11 +163,21 @@ func TestScriptRepairsAShellThatRefusesEveryCommand(t *testing.T) {
 	}
 }
 
+func TestScriptOwnsTheHomeDirectoryOfTheNodeUser(t *testing.T) {
+	body := render(t, testMesh(), serverNode())
+
+	// sshd refuses an authorized key that sits in a home directory owned by
+	// another user, so the script owns the directory that holds the key.
+	if !strings.Contains(body, `chown "$USER_NAME:$USER_NAME" "$HOME_DIR"`) {
+		t.Error("the script leaves the home directory to whoever created it")
+	}
+}
+
 func TestScriptGuardsEveryChangeSoASecondRunDoesNothing(t *testing.T) {
 	body := render(t, testMesh(), serverNode())
 
 	ordered := [][2]string{
-		{`if ! id -u "$USER_NAME"`, `useradd --create-home`},
+		{`if ! id -u "$USER_NAME"`, `useradd -m -s /bin/sh`},
 		{`if cmp -s "$SUDOERS_TMP" "$SUDOERS"`, `mv "$SUDOERS_TMP" "$SUDOERS"`},
 		{`if [ -f "$UNIT_FILE" ] && cmp -s "$UNIT_TMP" "$UNIT_FILE"`, `mv "$UNIT_TMP" "$UNIT_FILE"`},
 		{`mv "$UNIT_TMP" "$UNIT_FILE"`, `systemctl daemon-reload`},
