@@ -9,7 +9,7 @@ tags:
     - mobile
     - oauth
 created_at: 2026-11-17T19:22:37Z
-updated_at: 2026-11-17T20:54:22Z
+updated_at: 2026-11-18T19:11:01Z
 ---
 ## Overview
 
@@ -45,3 +45,9 @@ The proxy terminates user traffic and forwards it into the mesh, so it becomes a
 - [ ] The authorization model is written as an ADR.
 - [ ] The open question is answered and closed.
 - [ ] The proxy has a place in `mesh.yml`, or a documented reason it sits outside.
+
+## Status
+
+The maintainer decided on 2026-11-18 that a device that cannot run Nebula is out of scope for this round. The epic stays in the repository for a future decision, and its status stays `draft`. The question in `docs/questions/0001` stays open.
+
+No work starts from this epic until that decision changes.

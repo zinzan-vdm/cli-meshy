@@ -1,0 +1,51 @@
+schema: 1
+
+# The mesh of the empty-host run in .github/workflows/host.yml. It holds one
+# lighthouse and one node, and the node is the host that starts empty.
+name: hostlab
+cidr: 10.43.0.0/24
+interface: meshy-hostlab
+
+nebula:
+  version: v1.12.0
+
+ca:
+  duration: 20y
+  rotate_at: 80%
+  trust: [ca-1]
+  active: ca-1
+
+lighthouses:
+  - node: lighthouse
+    port: 4242
+
+certificates:
+  server: 1y
+  user: 1y
+  renew_before: 60d
+
+nodes:
+  - name: lighthouse
+    kind: server
+    groups: [core]
+    ip: 10.43.0.1
+    ssh:
+      user: meshy
+      host: lighthouse
+    public_addr: lighthouse:4242
+
+  - name: node-a
+    kind: server
+    groups: [web]
+    ip: 10.43.0.2
+    ssh:
+      user: meshy
+      host: host
+
+# The join is proved from the lighthouse, so the lighthouse may send ICMP to the
+# node. Without this rule the node drops the probe and the run proves nothing.
+rules:
+  - from: core
+    to: web
+    ports:
+      - any/icmp

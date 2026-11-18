@@ -1,0 +1,99 @@
+#!/bin/sh
+# A recorder that stands in for systemctl. A container has no systemd, so this
+# script never starts a process. It records the calls that would change a unit
+# and it answers the calls that read one, so apply and bootstrap see the unit
+# state that a real host would give them. The run asserts on the recorded calls.
+# See docs/patterns/0022.
+set -u
+
+LOG=/var/log/meshy-systemctl.log
+STATE=/var/lib/meshy-systemctl
+mkdir -p "$STATE" 2>/dev/null || true
+
+quiet=0
+now=0
+while [ $# -gt 0 ]; do
+	case "$1" in
+	--quiet | -q)
+		quiet=1
+		shift
+		;;
+	--now)
+		now=1
+		shift
+		;;
+	-*)
+		shift
+		;;
+	*)
+		break
+		;;
+	esac
+done
+
+verb=${1-}
+unit=${2-}
+
+record() {
+	if [ -n "$unit" ]; then
+		printf '%s %s\n' "$verb" "$unit" >>"$LOG"
+	else
+		printf '%s\n' "$verb" >>"$LOG"
+	fi
+}
+
+active() { [ -f "$STATE/active" ]; }
+
+case "$verb" in
+daemon-reload)
+	record
+	;;
+enable)
+	record
+	: >"$STATE/enabled"
+	if [ "$now" -eq 1 ]; then : >"$STATE/active"; fi
+	;;
+disable)
+	record
+	rm -f "$STATE/enabled"
+	;;
+start | restart)
+	record
+	: >"$STATE/active"
+	;;
+stop)
+	record
+	rm -f "$STATE/active"
+	;;
+reload)
+	record
+	if ! active; then
+		printf 'Job for %s failed because the unit is not active.\n' "$unit" >&2
+		exit 1
+	fi
+	;;
+is-active)
+	if active; then
+		if [ "$quiet" -eq 0 ]; then printf 'active\n'; fi
+		exit 0
+	fi
+	if [ "$quiet" -eq 0 ]; then printf 'inactive\n'; fi
+	exit 3
+	;;
+cat)
+	if [ -f "/etc/systemd/system/$unit" ]; then
+		cat "/etc/systemd/system/$unit"
+		exit 0
+	fi
+	printf 'No files found for %s.\n' "$unit" >&2
+	exit 1
+	;;
+status)
+	exit 0
+	;;
+*)
+	record
+	;;
+esac
+
+exit 0

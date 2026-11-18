@@ -15,3 +15,6 @@ test/e2e/generated/
 # The rotation scenario builds its image input and its key in place.
 test/e2e/rotate/.build/
 test/e2e/rotate/run/
+
+# The empty-host run builds the binary, the release, and the ssh key in place.
+test/e2e/host/.build/
