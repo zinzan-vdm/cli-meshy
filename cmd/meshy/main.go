@@ -29,6 +29,8 @@ func run(args []string) int {
 		return cmdValidate(args[1:])
 	case "plan":
 		return cmdPlan(args[1:])
+	case "apply":
+		return cmdApply(args[1:])
 	case "ca":
 		return cmdCA(args[1:])
 	case "issue":
@@ -62,6 +64,7 @@ Commands:
   init       create a mesh repository in a directory
   validate   check a mesh file and report every problem
   plan       compare a mesh file with the nodes and report every difference
+  apply      write the config and the certificate to one node
   ca         create the certificate authority of the mesh
   issue      mint a certificate for a node
   bootstrap  print the script that prepares a server node
@@ -73,7 +76,7 @@ Flags:
   --mesh <dir>   directory that holds mesh.yml (default ".")
 
 Planned:
-  apply, bundle, install, status, ca rotate
+  bundle, install, status, ca rotate
 `)
 }
 
