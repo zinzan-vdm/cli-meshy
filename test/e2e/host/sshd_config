@@ -1,0 +1,9 @@
+# The sshd of the lighthouse and of the empty host. The runner holds the only
+# key, so the account needs no password.
+Port 22
+PermitRootLogin prohibit-password
+PubkeyAuthentication yes
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+UsePAM no
+AllowUsers root meshy

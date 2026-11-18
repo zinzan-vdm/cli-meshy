@@ -1,0 +1,40 @@
+# The empty-host run of MESHY-043. One lighthouse, one host that starts with no
+# /etc/nebula content, and the runner that drives meshy over ssh. Only
+# .github/workflows/host.yml runs this file.
+#
+# The host and the lighthouse mount one public key, so the runner holds the only
+# private key. The runner reads mesh.yml from its own image and creates the vault
+# in the run, so no repository secret is used.
+name: meshy-host-e2e
+
+services:
+  lighthouse:
+    image: meshy-host-e2e:local
+    hostname: lighthouse
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun
+    volumes:
+      - ./.build/ssh/id_ed25519.pub:/run/keys/authorized_keys:ro
+    command: ["entrypoint"]
+
+  host:
+    image: meshy-host-e2e:local
+    hostname: host
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun
+    volumes:
+      - ./.build/ssh/id_ed25519.pub:/run/keys/authorized_keys:ro
+    command: ["entrypoint"]
+
+  runner:
+    image: meshy-host-runner:local
+    depends_on:
+      - lighthouse
+      - host
+    volumes:
+      - ./.build/ssh/id_ed25519:/work/ssh/id_ed25519:ro
+    command: ["run"]

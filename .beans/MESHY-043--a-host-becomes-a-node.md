@@ -1,14 +1,14 @@
 ---
 # MESHY-043
 title: A host becomes a node
-status: todo
+status: in-progress
 type: epic
 priority: high
 tags:
     - bootstrap
     - install
 created_at: 2026-11-18T01:05:00Z
-updated_at: 2026-11-18T01:05:00Z
+updated_at: 2026-11-18T19:11:01Z
 ---
 
 ## Overview
@@ -57,7 +57,18 @@ Neither command needs the authority key. `bootstrap` never runs its script, and 
 
 ## Status
 
-All three commands exist: `bootstrap` in MESHY-027, `install` in MESHY-021, and `apply` in MESHY-014. The criterion below stays open until a run on an empty host is recorded, and the harness that records it is MESHY-030.
+All three commands exist: `bootstrap` in MESHY-027, `install` in MESHY-021, and `apply` in MESHY-014. The run that records them is `test/e2e/host/`, and its job is `host` in `.github/workflows/host.yml`.
+
+Every criterion below stays open. The scenario and the job are written and gated on this host, but no run has crossed them. The host that wrote them has no docker and no `/dev/net/tun`, so a container cannot start there. The job passes on a runner, or the criteria stay open.
+
+| Criterion | Assertion in `test/e2e/host/run.sh` |
+|---|---|
+| an empty host runs the mesh after the three commands | 1, 3 and 4 |
+| a second `bootstrap` changes nothing | 2 |
+| `bootstrap` refuses a node that is not in `mesh.yml` | 5 |
+| `install` refuses a release whose checksum does not match | 6 |
+| a node that already runs the pinned version is not restarted | 7 |
+| neither command needs the authority key | the vault stays sealed until assertion 4 |
 
 ## Acceptance Criteria
 
@@ -67,3 +78,37 @@ All three commands exist: `bootstrap` in MESHY-027, `install` in MESHY-021, and 
 - [ ] `install` refuses a release whose checksum does not match.
 - [ ] A node that already runs the pinned version is not restarted.
 - [ ] Neither command needs the authority key.
+
+## Summary of Changes
+
+Files:
+
+- `test/e2e/host/mesh.yml`: one lighthouse and one node that the host serves. One rule lets the lighthouse group send ICMP to the node group, because the join is proved from the lighthouse.
+- `test/e2e/host/compose.yml`: three services. `lighthouse` and `host` run `meshy-host-e2e:local` with `NET_ADMIN` and `/dev/net/tun`. `runner` runs `meshy-host-runner:local`. Only the public key reaches the two nodes, and only the private key reaches the runner.
+- `test/e2e/host/Dockerfile`: Alpine, an ssh server, the pinned release, the recorder, the supervise loop, and the entrypoint.
+- `test/e2e/host/runner.Dockerfile`: Alpine, the meshy binary of this commit, `nebula-cert`, the verified release, and an ssh client.
+- `test/e2e/host/run.sh`: the seven assertions, with one printed line for each one.
+- `test/e2e/host/systemctl`: the recorder that stands in for systemd. It records the calls that change a unit and answers the calls that read one.
+- `test/e2e/host/supervise.sh`, `test/e2e/host/entrypoint.sh`, `test/e2e/host/sshd_config`: the process that starts Nebula, the container entrypoint, and the ssh configuration.
+- `test/e2e/host/scenario_test.go`: four tests. They check the mesh file, the privileges, the pin on every action, the timeout, the teardown, and the seven lines of `run.sh`. They need no root, no network, and no container.
+- `.github/workflows/host.yml`: one job. It verifies the pin, builds the binary and both images, runs the scenario under `timeout 300`, and tears down with `down -v` in an `if: always()` step.
+- `.gitignore`: ignores `test/e2e/host/.build/`.
+- `docs/patterns/0022-a-recorder-stands-in-for-systemd.md`, `docs/adr/0013-the-empty-host-run-is-its-own-scenario.md`.
+
+Decisions:
+
+- The vault is made in the run with `meshy ca init`. No share reaches the environment before assertion 4, so the last criterion has evidence.
+- The lighthouse takes the same three commands as the host. Assertion 4 therefore needs no second generator, and the peer of the join is a node that this repository prepared.
+- The image keeps the pinned release at `/usr/local/lib/meshy/nebula`, and `/usr/local/bin/nebula` starts empty. Assertion 3 then proves the upload of the bytes that the published digests name.
+- `install` runs with `--source` against the archive that the job verified, so the run needs no network. It still checks the archive and the member against `SHASUM256.txt`.
+- Assertion 6 uses a second mesh directory and a checksum file of zero digests, so no cache can satisfy it.
+- The ping of assertion 4 runs over ssh inside the lighthouse container. The runner holds no docker socket.
+
+Gates on this host: `gofmt -l .` silent, `go build ./...`, `go vet ./...`, `go test ./...` with 23 packages and no failure, `beans check` clean, and the write-tism audit at total 0.
+
+## Deviations
+
+- The unit is not started by real systemd. The recorder answers the unit calls, and a supervise loop starts Nebula from the path and the config that the unit names. A real virtual machine adds one assertion: the unit reports `active`, it owns the process, and that process runs as `User=meshy`. The loop runs as root.
+- `bootstrap` gives the node user `/usr/sbin/nologin`, and sshd refuses a command for that shell. The run copies the public key as root and then runs `usermod -s /bin/sh meshy`. The product is unchanged. The shell of the node user needs a decision, because `install` and `apply` reach the node as that user.
+- The scenario and the job have not run. This host has no docker and no `/dev/net/tun`. The job passes on a runner, and the criteria stay open until it does.
+- `docs/conf/0004` is unused. The scenario adds no configuration variable. Every value comes from `mesh.yml`, the compose file, or the workflow.

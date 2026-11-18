@@ -1,0 +1,84 @@
+name: host
+
+# The empty-host run of MESHY-043. It needs root, /dev/net/tun, and a container
+# runtime, so it stays apart from the unit job in ci.yml and from the live mesh
+# job in e2e.yml. A failure here names one host that became a node.
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  host:
+    name: empty host
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+      # The runner may hold no TUN device. Every step here is idempotent, so a
+      # runner that has one keeps it.
+      - name: Create the TUN device
+        run: sudo mkdir -p /dev/net && ([ -e /dev/net/tun ] || sudo mknod /dev/net/tun c 10 200) && sudo chmod 666 /dev/net/tun
+      - name: Read the pinned Nebula version
+        id: nebula
+        run: |
+          version="$(awk '/^[^[:space:]#]/{b=$1} b=="nebula:" && /^[[:space:]]+version:/{print $2; exit}' test/e2e/host/mesh.yml | tr -d '"')"
+          if [ -z "$version" ]; then
+            echo "::error::test/e2e/host/mesh.yml holds no nebula.version"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      # The archive and each member that the run needs are checked against the
+      # digests that the release publishes.
+      - name: Download and verify the pin
+        env:
+          VERSION: ${{ steps.nebula.outputs.version }}
+        run: |
+          asset="nebula-linux-amd64.tar.gz"
+          base="https://github.com/slackhq/nebula/releases/download/$VERSION"
+          curl -fsSL "$base/SHASUM256.txt" -o "$RUNNER_TEMP/SHASUM256.txt"
+          curl -fsSL "$base/$asset" -o "$RUNNER_TEMP/$asset"
+          want="$(awk -v name="$asset" '$2 == name {print $1}' "$RUNNER_TEMP/SHASUM256.txt")"
+          if [ -z "$want" ]; then
+            echo "::error::SHASUM256.txt names no $asset"
+            exit 1
+          fi
+          echo "$want  $RUNNER_TEMP/$asset" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/$asset" -C "$RUNNER_TEMP" nebula nebula-cert
+          for member in nebula nebula-cert; do
+            want="$(awk -v name="$asset/$member" '$2 == name {print $1}' "$RUNNER_TEMP/SHASUM256.txt")"
+            if [ -z "$want" ]; then
+              echo "::error::SHASUM256.txt names no $asset/$member"
+              exit 1
+            fi
+            echo "$want  $RUNNER_TEMP/$member" | sha256sum -c -
+          done
+      # The runner image carries the meshy binary that this commit builds, and
+      # the ssh key is made here, so no repository secret is used.
+      - name: Build the binaries and the images
+        run: |
+          build=test/e2e/host/.build
+          mkdir -p "$build/release" "$build/ssh"
+          install -m 0755 "$RUNNER_TEMP/nebula" "$build/nebula"
+          install -m 0755 "$RUNNER_TEMP/nebula-cert" "$build/nebula-cert"
+          install -m 0644 "$RUNNER_TEMP/SHASUM256.txt" "$build/release/SHASUM256.txt"
+          install -m 0644 "$RUNNER_TEMP/nebula-linux-amd64.tar.gz" "$build/release/nebula-linux-amd64.tar.gz"
+          # Both images are Alpine, so the binary must be static. Without this
+          # the container cannot exec it, which reads as "no such file".
+          CGO_ENABLED=0 go build -o "$build/meshy" ./cmd/meshy
+          ssh-keygen -q -t ed25519 -N "" -C "meshy host e2e" -f "$build/ssh/id_ed25519"
+          install -m 0644 "$build/ssh/id_ed25519.pub" "$build/ssh/authorized_keys"
+          docker build -f test/e2e/host/Dockerfile -t meshy-host-e2e:local test/e2e/host
+          docker build -f test/e2e/host/runner.Dockerfile -t meshy-host-runner:local test/e2e/host
+      - name: Check the compose file
+        run: docker compose -f test/e2e/host/compose.yml config > /dev/null
+      - name: Run the empty host
+        run: timeout 300 docker compose -f test/e2e/host/compose.yml up --abort-on-container-exit --exit-code-from runner
+      - name: Tear down
+        if: always()
+        run: docker compose -f test/e2e/host/compose.yml down -v

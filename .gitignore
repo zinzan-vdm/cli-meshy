@@ -11,3 +11,5 @@
 # The e2e mesh builds its image input and its configs in place.
 test/e2e/.build/
 test/e2e/generated/
+# The empty-host run builds the binary, the release, and the ssh key in place.
+test/e2e/host/.build/
