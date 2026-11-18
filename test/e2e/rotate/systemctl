@@ -37,9 +37,11 @@ is-active)
     exit 0
   fi
   echo inactive
-  # A unit that is not active explains itself, so the run log carries the reason.
+  # A unit that is not active explains itself in the container log, which the
+  # caller cannot see through the ssh channel.
   if [ -f "$logfile" ]; then
     tail -n 5 "$logfile" >&2
+    tail -n 5 "$logfile" >/proc/1/fd/1 2>/dev/null || true
   fi
   exit 3
   ;;
@@ -55,9 +57,10 @@ start | restart)
     kill "$(cat "$pidfile")" 2>/dev/null || true
     sleep 1
   fi
-  # The process writes to its log and to the container log, so a node that
-  # exits says why in the job output.
-  nebula -config "$config" 2>&1 | tee -a "$logfile" &
+  # The output goes to a file and never to the ssh channel, because a child
+  # that holds the channel open makes the caller wait for a command that has
+  # already finished.
+  nebula -config "$config" >>"$logfile" 2>&1 </dev/null &
   echo $! >"$pidfile"
   sleep 1
   if ! running; then
