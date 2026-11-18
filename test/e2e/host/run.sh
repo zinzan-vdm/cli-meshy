@@ -103,6 +103,9 @@ bootstrap_node() {
 	if ! on "meshy@$host" true; then
 		printf 'note: the account of the node user is %s\n' "$(on "root@$host" 'grep "^meshy:" /etc/passwd' || true)"
 		on "root@$host" 'ls -ld /home/meshy /home/meshy/.ssh /home/meshy/.ssh/authorized_keys' || true
+		printf 'note: the key the host holds is %s\n' "$(on "root@$host" 'ssh-keygen -lf /home/meshy/.ssh/authorized_keys' 2>&1 || true)"
+		printf 'note: the key the runner holds is %s\n' "$(ssh-keygen -lf "$KEY.pub" 2>&1 || true)"
+		on "root@$host" 'tail -n 20 /var/log/auth.log 2>/dev/null || true' || true
 		fail "the node user cannot run a command on $host"
 	fi
 }
