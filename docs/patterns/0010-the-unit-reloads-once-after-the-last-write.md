@@ -18,3 +18,4 @@ Nebula reads its config on `SIGHUP` and keeps its tunnels, so a reload is cheap.
 ## See also
 
 - [0009](0009-a-write-to-a-node-replaces-the-file-by-rename.md): the atomic write.
+- [0011](0011-a-stopped-unit-is-started-not-reloaded.md): a unit that does not run is started.

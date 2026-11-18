@@ -25,6 +25,7 @@ type fakeNode struct {
 	files     map[string]fakeFile
 	noUnit    bool
 	inactive  bool
+	staysDown bool
 	renameErr bool
 	reloadErr bool
 	staleHash bool
@@ -32,6 +33,7 @@ type fakeNode struct {
 	readErr   map[string]error
 	log       []string
 	reloads   int
+	restarts  int
 }
 
 func newFake() *fakeNode {
@@ -44,6 +46,16 @@ func (f *fakeNode) Run(_ context.Context, cmd string) (node.Result, error) {
 		f.log = append(f.log, "cat")
 		if f.noUnit {
 			return node.Result{ExitCode: 1, Stderr: "No files found for nebula@meshy-homelab.service."}, nil
+		}
+		return node.Result{}, nil
+	case cmd == restartCommand("homelab"):
+		f.log = append(f.log, "restart")
+		f.restarts++
+		if f.reloadErr {
+			return node.Result{ExitCode: 1, Stderr: "Job for nebula@meshy-homelab.service failed."}, nil
+		}
+		if !f.staysDown {
+			f.inactive = false
 		}
 		return node.Result{}, nil
 	case cmd == reloadCommand("homelab"):
@@ -206,8 +218,8 @@ func TestRunWritesEveryFileThroughATemporaryName(t *testing.T) {
 	if f.indexOf("reload") < f.lastRename() {
 		t.Error("the unit reloaded before the last write")
 	}
-	if !res.Reloaded {
-		t.Error("the result does not report the reload")
+	if res.Action != ActionReload {
+		t.Errorf("action = %q, want %q", res.Action, ActionReload)
 	}
 }
 
@@ -242,8 +254,8 @@ func TestRunWritesNothingWhenTheNodeMatches(t *testing.T) {
 	if err != nil {
 		t.Fatalf("the second Run failed: %v", err)
 	}
-	if len(res.Writes) != 0 || res.Reloaded {
-		t.Errorf("the second run reported %v, reloaded %v", res.Writes, res.Reloaded)
+	if len(res.Writes) != 0 || res.Action != ActionNone {
+		t.Errorf("the second run reported %v, action %q", res.Writes, res.Action)
 	}
 	if f.reloads != 0 {
 		t.Errorf("the unit reloaded %d times with no write", f.reloads)
@@ -252,6 +264,30 @@ func TestRunWritesNothingWhenTheNodeMatches(t *testing.T) {
 		if strings.HasPrefix(op, "write ") || strings.HasPrefix(op, "rename ") {
 			t.Errorf("the second run touched the node: %s", op)
 		}
+	}
+}
+
+func TestRunStartsAUnitThatIsNotRunning(t *testing.T) {
+	m, n := testMesh()
+	f := newFake()
+	f.inactive = true
+
+	res, err := Run(context.Background(), m, n, testFiles(), f)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	if f.restarts != 1 {
+		t.Errorf("the unit started %d times, want 1", f.restarts)
+	}
+	if f.reloads != 0 {
+		t.Errorf("the unit reloaded %d times, want 0", f.reloads)
+	}
+	if res.Action != ActionRestart {
+		t.Errorf("action = %q, want %q", res.Action, ActionRestart)
+	}
+	if f.indexOf("restart") < f.lastRename() {
+		t.Error("the unit started before the last write")
 	}
 }
 
@@ -381,6 +417,7 @@ func TestRunReportsAUnitThatIsNotActive(t *testing.T) {
 	m, n := testMesh()
 	f := newFake()
 	f.inactive = true
+	f.staysDown = true
 
 	_, err := Run(context.Background(), m, n, testFiles(), f)
 	if err == nil {

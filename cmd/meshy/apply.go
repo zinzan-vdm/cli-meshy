@@ -149,7 +149,10 @@ func reportOne(n config.Node, mesh config.Mesh, r apply.Result) {
 		return
 	}
 	fmt.Printf("%s: wrote %s\n", n.Name, strings.Join(r.Writes, " "))
-	if r.Reloaded {
+	switch r.Action {
+	case apply.ActionReload:
 		fmt.Printf("%s: reloaded %s\n", n.Name, node.Unit(mesh.Name))
+	case apply.ActionRestart:
+		fmt.Printf("%s: started %s\n", n.Name, node.Unit(mesh.Name))
 	}
 }

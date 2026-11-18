@@ -62,7 +62,7 @@ The unit is `nebula@meshy-<mesh>.service`, installed by `meshy bootstrap`. A mis
 
 - [x] A config that matches the node is not written.
 - [x] A changed config is written through a temporary file and a rename.
-- [x] The unit reloads once, after every write.
+- [x] The unit refreshes once, after the last write: a reload when it runs, a restart when it does not.
 - [x] The node reads back the new hash and an active unit.
 - [x] A missing unit exits 1 and names `meshy bootstrap`.
 - [x] File modes on the node are 0600 for the config and the key.

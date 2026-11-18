@@ -271,10 +271,24 @@ func TestReportOneNamesTheFilesAndTheReload(t *testing.T) {
 	target := config.Node{Name: "core-1"}
 
 	out, _, _ := captureBoth(t, func() int {
-		reportOne(target, mesh, apply.Result{Writes: []string{"config.yml", "core-1.crt"}, Reloaded: true})
+		reportOne(target, mesh, apply.Result{Writes: []string{"config.yml", "core-1.crt"}, Action: apply.ActionReload})
 		return 0
 	})
 	want := "core-1: wrote config.yml core-1.crt\ncore-1: reloaded nebula@meshy-homelab\n"
+	if out != want {
+		t.Errorf("stdout = %q, want %q", out, want)
+	}
+}
+
+func TestReportOneSaysStartedWhenTheUnitWasNotRunning(t *testing.T) {
+	mesh := config.Mesh{Name: "homelab"}
+	target := config.Node{Name: "core-1"}
+
+	out, _, _ := captureBoth(t, func() int {
+		reportOne(target, mesh, apply.Result{Writes: []string{"config.yml"}, Action: apply.ActionRestart})
+		return 0
+	})
+	want := "core-1: wrote config.yml\ncore-1: started nebula@meshy-homelab\n"
 	if out != want {
 		t.Errorf("stdout = %q, want %q", out, want)
 	}
