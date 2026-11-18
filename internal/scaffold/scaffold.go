@@ -65,11 +65,15 @@ const fence = "```"
 // workflow is the workflow file that a mesh repository carries. The meshy
 // repository pins the CLI, writes the ssh identity from repository secrets,
 // and plans on every pull request from this repository. The plan is the
-// report, so a difference passes the job and an exit code of 2 fails it.
+// report, so a difference passes the job and an exit code of 2 fails it. A
+// merge to main, a weekly run, and a manual run reach the apply job, which
+// unseals the vault from shares and locks it again.
 const workflow = `name: meshy
 
 on:
   pull_request:
+  push:
+    branches: [main]
   schedule:
     - cron: "0 3 * * 1"
   workflow_dispatch:
@@ -156,6 +160,158 @@ jobs:
             echo "::error::meshy plan produced no plan, exit code $code"
             exit 1
           fi
+      - name: Remove the ssh identity
+        if: always()
+        run: rm -rf "${{ runner.temp }}/meshy"
+
+  # A merge is the approval, so only a trusted event reaches this job. A
+  # pull request never does, and never gets a share.
+  apply:
+    if: github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: stable
+      - name: Install meshy
+        run: |
+          go install github.com/zinzan-vdm/cli-meshy/cmd/meshy@$MESHY_CLI_REF
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - name: Write the ssh identity
+        env:
+          HOSTS: ${{ secrets.MESHY_KNOWN_HOSTS }}
+          KEY: ${{ secrets.MESHY_SSH_PRIVATE_KEY }}
+          MESHY_KNOWN_HOSTS: ${{ runner.temp }}/meshy/known_hosts
+          MESHY_SSH_KEY: ${{ runner.temp }}/meshy/id_ed25519
+        run: |
+          missing=""
+          if [ -z "$HOSTS" ]; then missing="MESHY_KNOWN_HOSTS"; fi
+          if [ -z "$KEY" ]; then missing="$missing MESHY_SSH_PRIVATE_KEY"; fi
+          if [ -n "$missing" ]; then
+            echo "::error::the apply needs these repository secrets: $missing"
+            exit 1
+          fi
+          mkdir -p "$(dirname "$MESHY_KNOWN_HOSTS")"
+          umask 077
+          printf '%s\n' "$HOSTS" > "$MESHY_KNOWN_HOSTS"
+          printf '%s\n' "$KEY" > "$MESHY_SSH_KEY"
+      # The plan runs with a closed vault, so a quiet week never unseals. A
+      # merge applies whatever the plan says, because the review approved it.
+      - name: Plan
+        id: plan
+        env:
+          MESHY_KNOWN_HOSTS: ${{ runner.temp }}/meshy/known_hosts
+          MESHY_SSH_KEY: ${{ runner.temp }}/meshy/id_ed25519
+          MESHY_EVENT: ${{ github.event_name }}
+        run: |
+          set +e
+          meshy plan --json > "$RUNNER_TEMP/plan.json"
+          code=$?
+          set -e
+          if [ "$code" -ge 2 ]; then
+            echo "::error::meshy plan produced no plan, exit code $code"
+            exit 1
+          fi
+          # The plan exit code carries the answer: 0 is a match, 1 is a
+          # difference, and anything above 1 stopped the step. So the gate
+          # needs no JSON reader and no tool beyond the shell.
+          apply=false
+          if [ "$MESHY_EVENT" = "push" ] || [ "$code" -eq 1 ]; then
+            apply=true
+          fi
+          {
+            echo "## meshy plan"
+            echo
+            case "$code" in
+              0) echo "The nodes match mesh.yml." ;;
+              1) echo "The plan holds at least one difference: drift or a renewal." ;;
+            esac
+            if [ "$apply" = "true" ]; then
+              echo
+              echo "This run applies the plan."
+            else
+              echo
+              echo "No drift and no renewal, so this run applies nothing."
+            fi
+            echo
+            echo '` + fence + `json'
+            cat "$RUNNER_TEMP/plan.json"
+            echo '` + fence + `'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "apply=$apply" >> "$GITHUB_OUTPUT"
+      - name: Unlock
+        if: steps.plan.outputs.apply == 'true'
+        env:
+          MESHY_SHARE_1: ${{ secrets.MESHY_SHARE_1 }}
+          MESHY_SHARE_2: ${{ secrets.MESHY_SHARE_2 }}
+          MESHY_SHARE_3: ${{ secrets.MESHY_SHARE_3 }}
+        run: |
+          missing=""
+          if [ -z "$MESHY_SHARE_1" ]; then missing="MESHY_SHARE_1"; fi
+          if [ -z "$MESHY_SHARE_2" ]; then missing="$missing MESHY_SHARE_2"; fi
+          if [ -z "$MESHY_SHARE_3" ]; then missing="$missing MESHY_SHARE_3"; fi
+          if [ -n "$missing" ]; then
+            echo "::error::the apply needs these repository secrets: $missing"
+            exit 1
+          fi
+          meshy unlock --from-env
+      # apply signs and renews, so it needs the tool that the mesh pins. The
+      # archive and the member are checked against the published digests, and
+      # the tool goes where ca.Find looks. The step runs after Unlock, because
+      # Unlock refuses a .meshy that already holds a file.
+      - name: Install nebula-cert
+        if: steps.plan.outputs.apply == 'true'
+        run: |
+          version="$(awk '/^[^[:space:]#]/{b=$1} b=="nebula:" && /^[[:space:]]+version:/{print $2; exit}' mesh.yml | tr -d '"')"
+          if [ -z "$version" ]; then
+            echo "::error::mesh.yml holds no nebula.version"
+            exit 1
+          fi
+          asset="nebula-linux-amd64.tar.gz"
+          base="https://github.com/slackhq/nebula/releases/download/$version"
+          curl -fsSL "$base/SHASUM256.txt" -o "$RUNNER_TEMP/SHASUM256.txt"
+          curl -fsSL "$base/$asset" -o "$RUNNER_TEMP/$asset"
+          want="$(awk -v name="$asset" '$2 == name {print $1}' "$RUNNER_TEMP/SHASUM256.txt")"
+          if [ -z "$want" ]; then
+            echo "::error::SHASUM256.txt names no $asset"
+            exit 1
+          fi
+          echo "$want  $RUNNER_TEMP/$asset" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/$asset" -C "$RUNNER_TEMP" nebula-cert
+          want="$(awk -v name="$asset/nebula-cert" '$2 == name {print $1}' "$RUNNER_TEMP/SHASUM256.txt")"
+          if [ -z "$want" ]; then
+            echo "::error::SHASUM256.txt names no $asset/nebula-cert"
+            exit 1
+          fi
+          echo "$want  $RUNNER_TEMP/nebula-cert" | sha256sum -c -
+          install -D -m 0755 "$RUNNER_TEMP/nebula-cert" ".meshy/bin/$version/linux-amd64/nebula-cert"
+      - name: Apply
+        if: steps.plan.outputs.apply == 'true'
+        env:
+          MESHY_KNOWN_HOSTS: ${{ runner.temp }}/meshy/known_hosts
+          MESHY_SSH_KEY: ${{ runner.temp }}/meshy/id_ed25519
+        run: |
+          set +e
+          meshy apply --json > "$RUNNER_TEMP/apply.json"
+          code=$?
+          set -e
+          {
+            echo "## meshy apply"
+            echo
+            echo '` + fence + `json'
+            cat "$RUNNER_TEMP/apply.json"
+            echo '` + fence + `'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$code" -ne 0 ]; then
+            echo "::error::meshy apply exited $code, see the report above"
+            exit "$code"
+          fi
+      # The vault closes even when the apply step failed, so a failed run does
+      # not leave the plaintext on the runner.
+      - name: Lock
+        if: always()
+        run: meshy lock
       - name: Remove the ssh identity
         if: always()
         run: rm -rf "${{ runner.temp }}/meshy"
