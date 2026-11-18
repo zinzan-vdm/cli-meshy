@@ -63,11 +63,11 @@ Assertions, in order:
 
 ## Acceptance Criteria
 
-- [ ] `docker compose up` builds the mesh and runs the four assertions.
-- [ ] The run finishes in under 90 seconds.
+- [x] `docker compose up` builds the mesh and runs the four assertions.
+- [x] The run finishes in under 90 seconds. The job takes about 30 seconds.
 - [x] A broken rule fails assertion 3 with a message that names the port.
 - [x] A broken reload fails assertion 4 with a message that names the node.
-- [ ] `down -v` leaves no container, network, or volume behind.
+- [x] `down -v` leaves no container, network, or volume behind.
 - [x] The job runs in CI and never on a development host.
 
 
@@ -85,6 +85,23 @@ Assertions, in order:
 - `.github/workflows/e2e.yml`: the separate job. It creates `/dev/net/tun` and checks the pinned release against `SHASUM256.txt`. It builds the image once, renders the configs, and runs the mesh under `timeout 90`.
 - `.gitignore`: the build input and the generated configs of the e2e run.
 - `docs/patterns/0001-tests-need-no-root-or-network.md`: the enforcement section names the e2e job.
+
+## Verification
+
+The job ran and passed on a GitHub-hosted runner: run `44328649764`, job `live mesh`, 30 seconds. It printed one line for each assertion:
+
+```
+ok 1 ping 10.42.0.2 from node-b
+ok 2 10.42.0.2:8080 from node-b
+ok 3 10.42.0.2:9090 from node-b times out
+ok 4 node-b reaches 9090 after node-a reloaded
+e2e: 4 assertions passed
+```
+
+The first run of the job failed twice, and both failures were real:
+
+1. **The harness was built with cgo**, so the Alpine image could not exec it. The error reads `no such file or directory`, because the interpreter is missing and not the file. The job now builds it with `CGO_ENABLED=0`.
+2. **Nothing listened on 8080 or 9090.** `node-a` ran Nebula and the reload endpoint, so the second assertion met a connection refusal. The control mode now accepts on both ports, which is also what makes the third assertion a timeout instead of a refusal.
 
 ## Deviations
 
