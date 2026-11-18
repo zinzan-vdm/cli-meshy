@@ -42,15 +42,20 @@ func Unit(mesh string) string { return "nebula@meshy-" + mesh }
 
 // Commands returns the read-only commands for one node, in order.
 func Commands(m config.Mesh, n config.Node) []string {
-	d := Dir(m.Name)
 	return []string{
 		"nebula -version",
 		"systemctl is-active " + Unit(m.Name),
-		"nebula-cert print -json -path " + d + "/" + n.Name + ".crt",
+		certCommand(m, n),
 		"ip link show " + m.Interface,
-		"sha256sum " + d + "/config.yml",
+		"sha256sum " + Dir(m.Name) + "/config.yml",
 		authorityCommand(m.Name),
 	}
+}
+
+// certCommand reads the certificate of one node. The issuer field of that
+// certificate names the authority that signed it.
+func certCommand(m config.Mesh, n config.Node) string {
+	return "nebula-cert print -json -path " + Dir(m.Name) + "/" + n.Name + ".crt"
 }
 
 // authorityCommand reads the certificate file that pki.ca names. The file holds
@@ -152,7 +157,22 @@ func Read(ctx context.Context, m config.Mesh, n config.Node, ex Executor) (State
 // holds. A rotation reads this list back, because the list is the proof that the
 // node took the bundle.
 func ReadAuthorities(ctx context.Context, m config.Mesh, n config.Node, ex Executor) ([]Cert, error) {
-	cmd := authorityCommand(m.Name)
+	return readCerts(ctx, m, n, ex, authorityCommand(m.Name), "no certificate authority at "+Dir(m.Name)+"/ca.crt")
+}
+
+// ReadCert returns the certificate that one node holds. A rotation reads it back
+// after the reload, because the issuer field names the authority that signed it.
+func ReadCert(ctx context.Context, m config.Mesh, n config.Node, ex Executor) (Cert, error) {
+	certs, err := readCerts(ctx, m, n, ex, certCommand(m, n), "no certificate at "+Dir(m.Name)+"/"+n.Name+".crt")
+	if err != nil {
+		return Cert{}, err
+	}
+	return certs[0], nil
+}
+
+// readCerts runs one print command on one node and reads every document that
+// the tool prints.
+func readCerts(ctx context.Context, m config.Mesh, n config.Node, ex Executor, cmd, missing string) ([]Cert, error) {
 	c, cancel := context.WithTimeout(ctx, Timeout)
 	defer cancel()
 
@@ -161,7 +181,7 @@ func ReadAuthorities(ctx context.Context, m config.Mesh, n config.Node, ex Execu
 		return nil, fmt.Errorf("node %s: %s: %w", n.Name, cmd, err)
 	}
 	if res.ExitCode != 0 {
-		return nil, fmt.Errorf("node %s: no certificate authority at %s/ca.crt: %s", n.Name, Dir(m.Name), strings.TrimSpace(res.Stderr))
+		return nil, fmt.Errorf("node %s: %s: %s", n.Name, missing, strings.TrimSpace(res.Stderr))
 	}
 	certs, err := ParseCerts(res.Stdout)
 	if err != nil {

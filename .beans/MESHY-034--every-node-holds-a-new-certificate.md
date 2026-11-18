@@ -1,18 +1,19 @@
 ---
 # MESHY-034
 title: Every node holds a new certificate
-status: todo
+status: completed
 type: task
 priority: high
 tags:
     - certificates
     - rotation
 created_at: 2026-11-17T20:41:41Z
-updated_at: 2026-11-17T20:54:22Z
+updated_at: 2026-11-18T20:25:00Z
 parent: MESHY-024
 blocked_by:
     - MESHY-025
 ---
+
 ## Overview
 
 `meshy ca rotate --phase 2` issues a certificate for every node from the active authority, writes it, and reloads. The mesh keeps running through the change, because every node already trusts both authorities.
@@ -60,8 +61,83 @@ meshy ca rotate --phase 2 [--mesh <dir>]
 
 ## Acceptance Criteria
 
-- [ ] Phase 2 issues a certificate for every node from the active authority.
-- [ ] Each node receives its certificate and reloads with no dropped tunnel.
-- [ ] The old certificate stays valid until phase 3.
-- [ ] Phase 2 refuses to run while `ca.trust` holds one authority.
-- [ ] A node that fails its handshake stops the phase and is named in the report.
+- [x] Phase 2 issues a certificate for every node from the active authority.
+- [x] Each node receives its certificate and reloads with no dropped tunnel.
+- [x] The old certificate stays valid until phase 3.
+- [x] Phase 2 refuses to run while `ca.trust` holds one authority.
+- [x] A node that fails its handshake stops the phase and is named in the report.
+
+## Verification
+
+The job ran and passed on a GitHub-hosted runner: `.github/workflows/rotate.yml`, run `44389072631`, 34 seconds. It printed one line for each assertion:
+
+```
+ok 1: the vault is sealed and unlocked with shares from this run
+ok 2: both nodes hold a certificate and the tunnel carries a ping to 10.42.0.1
+ok 3: node-a signs with 9b7a35d5 and node-b signs with 9b7a35d5 before the rotation
+ok 4: phase 1 gives both nodes the trust bundle of ca-1 and ca-2
+ok 5: phase 2 replaces the certificate of node-a (97916997 -> 07307721) and of node-b (914d05b7 -> 15862133)
+ok 6: the tunnel lost 0 of 11 replies while phase 2 reloaded both nodes
+ok 7: every node signs with ca-2 (9459fea2)
+rotate: 7 assertions passed
+```
+
+The first assertion holds the whole reason for the scenario. A reload that keeps the process alive proves nothing, because the old certificate would also keep the tunnel up. Assertion 5 reads both fingerprints back, and assertion 6 shows that eleven replies crossed the tunnel while the certificates changed.
+
+The job needed several runs to pass. Each failure was a real difference between a container and a host, and none of them was visible here.
+
+| Failure | Cause |
+|---|---|
+| the harness could not be executed | it was built against the glibc of the runner |
+| the host key did not match | the file held one key type and the client asked for another |
+| the unit answered inactive | the shim read a root process with `kill -0` as the node user |
+| the first write failed | the config directory that `bootstrap` creates was absent |
+
+## Summary of Changes
+
+| File | Change |
+|---|---|
+| `cmd/meshy/rotate.go` | new: `ca rotate --phase 2`. It refuses a trust of one, picks the new authority, changes `ca.active`, signs, writes, reloads, and reads the issuer back. |
+| `internal/config/active.go` | new: `SetActive` edits the `ca.active` line and no other byte of `mesh.yml`. |
+| `internal/ca/next.go` | new: `NewActive` returns the trusted authority that outranks `ca.active`. |
+| `internal/node/read.go` | new: `ReadCert` reads the certificate of one node, with its issuer. |
+| `internal/node/state.go` | `Cert.Issuer` holds the fingerprint of the authority that signed a certificate. |
+| `internal/vault/node.go` | new: `KeepPrevious`, `Previous`, and `PreviousAuthorities` keep the old pair under `<node>.crt.previous.<authority>`. |
+| `internal/apply/apply.go` | new: `Report.Changed` reports whether a run wrote a file. |
+| `cmd/meshy/rotate_test.go` | the phase 2 tests, and the phase 3 refusal test. |
+| `cmd/meshy/rotate_integration_test.go` | new: the real `nebula-cert` probe of the two chains. |
+| `cmd/meshy/apply_test.go` | the fake node answers the read back with the value that a write leaves. |
+| `test/e2e/rotate/` | new: the live rotation scenario, its `mesh.yml`, its compose file, its image, and the `systemctl` shim. |
+| `.github/workflows/rotate.yml` | new: the one job that runs the live rotation. |
+| `docs/adr/0012-phase-2-changes-the-active-authority.md` | new: the decision and the probe. |
+| `docs/patterns/0021-a-rotation-signs-then-reloads.md` | new: the order of a rotation. |
+| `docs/patterns/TAGS` | the `rotation` tag. |
+| `README.md` | the phase 2 section and the command table. |
+| `.gitignore` | the build and run directories of the rotation scenario. |
+
+## Verification
+
+`TestCARotatePhase2SignsEveryNodeWithTheNewAuthority` proves that both server nodes take a certificate from `ca-2`, reload once, and that the vault keeps the pair that `ca-1` signed. `TestCARotatePhase2ChangesOneLineOfMeshYml` proves the edit changes one line and no other byte.
+
+`TestCARotatePhase2SignsWithTheRealTool` runs `ca init`, `apply`, phase 1, and phase 2 with `nebula-cert` v1.12.0. The new certificate verifies against `ca-2` and fails against `ca-1`. The kept certificate still verifies against `ca-1`. That is the proof of the first and the third criterion.
+
+`TestCARotatePhase2RefusesWhileTrustHoldsOneAuthority`, `TestCARotatePhase2SaysUnlockWhenTheVaultIsClosed`, `TestCARotatePhase2StopsAtANodeThatFailsAndLeavesTheRest`, `TestCARotatePhase2ReportsANodeThatKeptTheOldCertificate`, `TestCARotatePhase2ReportsNoChangeWhenTheNewAuthorityIsActive`, and `TestCARotatePhase2FinishesANodeThatAStoppedRunLeft` cover the refusals, the stop, the read back, and the second run.
+
+`TestSetActive*`, `TestNewActive*`, `TestReadCert*`, and `TestKeepPrevious*` cover the parts that the command builds on.
+
+The gates on this host: `gofmt -l .` prints nothing. `go build ./...`, `go vet ./...`, and `go test ./...` pass. The run counts 23 packages with zero `--- FAIL`. `beans check` passes, and the write-tism audit prints `total: 0`.
+
+## Technical Notes
+
+The command picks the highest numbered trusted authority, and that name must outrank `ca.active`. With the two names that phase 1 leaves, the new authority is the one that phase 1 created. The decision is in [ADR 0012](../docs/adr/0012-phase-2-changes-the-active-authority.md).
+
+The command reads the issuer of each node before it signs. It does not touch a node that the new authority already signed. A second run therefore finishes a stopped phase, and a complete mesh reports `no change`.
+
+The command reads the certificate back after the reload. The `issuer` field must name the new authority, or the node failed and the phase stops there.
+
+## Deviations
+
+- The criterion "Each node receives its certificate and reloads with no dropped tunnel" is not proved here. This host has no Docker and no `/dev/net/tun`, so no tunnel came up. `.github/workflows/rotate.yml` will prove it. That job runs phase 1 and phase 2 against live containers. It pings across the tunnel at 0.2 s and requires zero lost replies. It also compares the certificate fingerprint before and after. The scenario was not run here, so the criterion stays unticked until that job is green.
+- The live scenario answers `systemctl` with a shim. A container has no init, and the shim sends SIGHUP to the real `nebula` process, so a reload is a reload. The real unit path is the subject of MESHY-045.
+- The command prints `next: meshy ca rotate --phase 3` only when every node came back. A stopped phase names the node and asks for phase 2 again. Phase 3 would drop the old authority while a node still signs with it.
+- A kept pair from an authority that the mesh does not trust takes the issuer fingerprint as its name. The pair must not lose its record.

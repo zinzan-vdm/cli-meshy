@@ -40,6 +40,46 @@ func DeleteCertificate(record Record, name string) {
 	delete(record, name+KeySuffix)
 }
 
+// A rotation keeps the certificate that a node held before the new one, under
+// the name of the authority that signed it. The suffix does not end in .crt, so
+// a kept certificate is not a certificate that the record offers for a node and
+// the revocation never reads it as one.
+const previousMarker = ".previous."
+
+// KeepPrevious stores the pair that a rotation replaces, so the old certificate
+// stays in the vault and stays usable until phase 3 drops its authority.
+func KeepPrevious(record Record, name, authority string, cert, key []byte) {
+	record[name+CertSuffix+previousMarker+authority] = cert
+	record[name+KeySuffix+previousMarker+authority] = key
+}
+
+// Previous returns the pair that a node held before the authority signed the
+// current one.
+func Previous(record Record, name, authority string) (cert, key []byte, ok bool) {
+	cert, certOK := record[name+CertSuffix+previousMarker+authority]
+	key, keyOK := record[name+KeySuffix+previousMarker+authority]
+	if !certOK || !keyOK {
+		return nil, nil, false
+	}
+	return cert, key, true
+}
+
+// PreviousAuthorities returns the authorities whose kept pairs the record holds
+// for one node, in sort order. Phase 3 needs the list, because it drops the
+// certificates of the authority that it removes.
+func PreviousAuthorities(record Record, name string) []string {
+	prefix := name + CertSuffix + previousMarker
+	var names []string
+	for key := range record {
+		if !strings.HasPrefix(key, prefix) {
+			continue
+		}
+		names = append(names, strings.TrimPrefix(key, prefix))
+	}
+	sort.Strings(names)
+	return names
+}
+
 // Certificates returns every name that the record holds a certificate for, in
 // sort order. The names are a mix of nodes and authorities, so a caller that
 // wants nodes must set aside the names that the mesh file trusts.

@@ -252,3 +252,33 @@ func TestReadAllReportsOneBadNodeAndKeepsTheRest(t *testing.T) {
 		t.Errorf("errs = %v", errs)
 	}
 }
+
+func TestReadCertNamesTheCommandAndTheIssuer(t *testing.T) {
+	m := testMesh()
+	f := &fakeNode{}
+
+	cert, err := ReadCert(context.Background(), m, m.Nodes[0], f)
+	if err != nil {
+		t.Fatalf("ReadCert: %v", err)
+	}
+	if cert.Issuer != "cc33dd44" {
+		t.Errorf("issuer = %q, want cc33dd44", cert.Issuer)
+	}
+	want := "nebula-cert print -json -path /etc/nebula/meshy-homelab/core-1.crt"
+	if len(f.seen) != 1 || f.seen[0] != want {
+		t.Errorf("the node saw %v, want %q", f.seen, want)
+	}
+}
+
+func TestReadCertNamesANodeThatHoldsNoCertificate(t *testing.T) {
+	m := testMesh()
+	f := &fakeNode{failCert: true}
+
+	_, err := ReadCert(context.Background(), m, m.Nodes[0], f)
+	if err == nil {
+		t.Fatal("ReadCert accepted a node with no certificate")
+	}
+	if !strings.Contains(err.Error(), "no certificate at /etc/nebula/meshy-homelab/core-1.crt") {
+		t.Errorf("error = %v, want the path and the command that builds it", err)
+	}
+}
