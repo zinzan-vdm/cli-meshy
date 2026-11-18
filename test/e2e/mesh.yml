@@ -1,0 +1,54 @@
+schema: 1
+
+name: lab
+cidr: 10.42.0.0/24
+interface: meshy-lab
+
+nebula:
+  version: v1.12.0
+
+ca:
+  duration: 20y
+  rotate_at: 80%
+  trust: [ca-1]
+  active: ca-1
+
+lighthouses:
+  - node: lighthouse
+    port: 4242
+
+certificates:
+  server: 1y
+  user: 1y
+  renew_before: 60d
+
+nodes:
+  - name: lighthouse
+    kind: server
+    groups: [core]
+    ip: 10.42.0.1
+    ssh:
+      user: meshy
+      host: 203.0.113.10
+    public_addr: lighthouse:4242
+
+  - name: node-a
+    kind: server
+    groups: [web]
+    ip: 10.42.0.2
+    ssh:
+      user: meshy
+      host: 203.0.113.11
+
+  - name: node-b
+    kind: user
+    groups: [user]
+    ip: 10.42.0.3
+    platform: linux/amd64
+
+rules:
+  - from: user
+    to: web
+    ports:
+      - any/icmp
+      - 8080/tcp
