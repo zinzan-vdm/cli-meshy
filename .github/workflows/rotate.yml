@@ -84,8 +84,10 @@ jobs:
         run: |
           for _ in $(seq 1 60); do
             rm -f "$RUNNER_TEMP/known_hosts"
-            ssh-keyscan -p 2221 -t ed25519 127.0.0.1 >> "$RUNNER_TEMP/known_hosts" 2>/dev/null
-            ssh-keyscan -p 2222 -t ed25519 127.0.0.1 >> "$RUNNER_TEMP/known_hosts" 2>/dev/null
+            # ssh-keyscan exits 1 while a port is still closed, and the loop
+            # must wait rather than abort.
+            ssh-keyscan -p 2221 -t ed25519 127.0.0.1 >> "$RUNNER_TEMP/known_hosts" 2>/dev/null || true
+            ssh-keyscan -p 2222 -t ed25519 127.0.0.1 >> "$RUNNER_TEMP/known_hosts" 2>/dev/null || true
             if grep -qF "[127.0.0.1]:2221" "$RUNNER_TEMP/known_hosts" && grep -qF "[127.0.0.1]:2222" "$RUNNER_TEMP/known_hosts"; then
               exit 0
             fi
