@@ -55,7 +55,9 @@ start | restart)
     kill "$(cat "$pidfile")" 2>/dev/null || true
     sleep 1
   fi
-  nebula -config "$config" >"$logfile" 2>&1 &
+  # The process writes to its log and to the container log, so a node that
+  # exits says why in the job output.
+  nebula -config "$config" 2>&1 | tee -a "$logfile" &
   echo $! >"$pidfile"
   sleep 1
   if ! running; then
