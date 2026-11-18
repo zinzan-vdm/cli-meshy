@@ -72,7 +72,7 @@ func stateFor(t *testing.T, m config.Mesh, name string, expires time.Time) node.
 			Addresses:   []string{n.IP},
 			NotAfter:    expires.Format(time.RFC3339),
 		},
-		Authority: node.Cert{Present: true, Name: "ca-1", IsCA: true},
+		Authorities: []node.Cert{{Present: true, Name: "ca-1", IsCA: true}},
 	}
 }
 
@@ -206,8 +206,10 @@ func TestComputeReportsEachDifference(t *testing.T) {
 			detail: `expiry "soon" is not readable`,
 		},
 		{
-			name:   "authority is not trusted",
-			change: func(st *node.State) { st.Authority.Name = "ca-2" },
+			name: "authority is not trusted",
+			change: func(st *node.State) {
+				st.Authorities = append(st.Authorities, node.Cert{Present: true, Name: "ca-2", IsCA: true})
+			},
 			kind:   KindCertificate,
 			detail: "authority ca-2 is not trusted",
 		},
@@ -234,6 +236,34 @@ func TestComputeReportsEachDifference(t *testing.T) {
 				t.Errorf("changes = %d, clean = %v", report.Changes, report.Clean())
 			}
 		})
+	}
+}
+
+func TestComputeReportsAnAuthorityThatTheNodeDoesNotTrust(t *testing.T) {
+	m := testMesh()
+	m.CA.Trust = []string{"ca-1", "ca-2"}
+
+	st := stateFor(t, m, "web-1", now.Add(200*24*time.Hour))
+	report := Compute(Input{Mesh: m, Readings: []Reading{{Name: "web-1", State: st}}, Now: now})
+	row := nodeRow(t, report, "web-1")
+
+	if len(row.Changes) != 1 || row.Changes[0].Detail != "the node does not trust ca-2" {
+		t.Fatalf("changes = %+v, want the missing authority", row.Changes)
+	}
+}
+
+func TestComputeReportsNoChangeWhenTheNodeTrustsEveryAuthority(t *testing.T) {
+	m := testMesh()
+	m.CA.Trust = []string{"ca-1", "ca-2"}
+
+	st := stateFor(t, m, "web-1", now.Add(200*24*time.Hour))
+	st.Authorities = []node.Cert{
+		{Present: true, Name: "ca-1", IsCA: true},
+		{Present: true, Name: "ca-2", IsCA: true},
+	}
+	report := Compute(Input{Mesh: m, Readings: []Reading{{Name: "web-1", State: st}}, Now: now})
+	if row := nodeRow(t, report, "web-1"); len(row.Changes) != 0 {
+		t.Errorf("changes = %+v, want none", row.Changes)
 	}
 }
 

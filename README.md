@@ -2,7 +2,7 @@
 
 `meshy` builds and maintains private overlay networks on top of Nebula. One git repository describes one mesh. A pull request plans the change, a merge applies it, and a GitHub Actions runner does the work. `meshy` also runs locally with the same code path.
 
-Status: pre-alpha. `init`, `validate`, `plan`, `ca init`, `issue`, `bootstrap`, `install`, `bundle`, `unlock`, `lock`, and `apply` work.
+Status: pre-alpha. `init`, `validate`, `plan`, `ca init`, `ca rotate --phase 1`, `issue`, `bootstrap`, `install`, `bundle`, `unlock`, `lock`, and `apply` work.
 
 ## What it does
 
@@ -122,6 +122,21 @@ The exit code is 0 when every node matches or was updated. It is 1 when at least
 
 The write runs as the node user and needs no sudo. Only the unit command uses `sudo`: a reload when the unit runs, and a restart when it does not. The rules are in [docs/patterns/0009](docs/patterns/0009-a-write-to-a-node-replaces-the-file-by-rename.md), [0010](docs/patterns/0010-the-unit-reloads-once-after-the-last-write.md), and [0011](docs/patterns/0011-a-stopped-unit-is-started-not-reloaded.md).
 
+### Rotate the authority
+
+A rotation is three phases, and each one leaves the mesh working. Phase 1 adds the next authority to the trust bundle and changes no certificate:
+
+```sh
+meshy unlock
+meshy ca rotate --phase 1
+```
+
+The command creates the next authority, seals it in the vault, adds it to `ca.trust` in `mesh.yml`, and writes the new bundle to every server node. It reads the authority list back from each node and prints the phase that comes next. Phase 1 signs no certificate, so a node that the run does not reach keeps its old certificate and keeps working.
+
+The command refuses to run when `ca.trust` already holds two authorities, and when the vault is locked. The exit code is 0 when every node took the bundle, 1 when at least one node failed, and 2 when the run never started.
+
+The decision is in [docs/adr/0011](docs/adr/0011-a-trust-bundle-is-one-file-of-certificates.md). The rule for the edit is in [docs/patterns/0020](docs/patterns/0020-an-edit-to-mesh-yml-keeps-every-other-byte.md).
+
 ### Join a user node
 
 A user node is a machine that `meshy` cannot reach over SSH, so the control plane cannot configure it. `bundle` writes one archive for it:
@@ -156,7 +171,8 @@ The decisions are in [docs/adr/0010](docs/adr/0010-one-archive-carries-every-ins
 | `install` | works |
 | `bundle` | works |
 | `bootstrap` | works |
-| `ca rotate` | planned |
+| `ca rotate --phase 1` | works |
+| `ca rotate --phase 2` and `--phase 3` | planned |
 
 `--mesh <dir>` selects the directory that holds `mesh.yml`. It defaults to the current directory.
 

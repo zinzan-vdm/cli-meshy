@@ -339,17 +339,40 @@ func interfaceFacts(m config.Mesh, st node.State) []Change {
 	}}
 }
 
+// authorityFacts compares the authorities in the trust bundle on the node with
+// the authorities that mesh.yml trusts. The bundle is the whole set, so a name
+// that is missing on the node and a name that the mesh does not trust are two
+// different differences.
 func authorityFacts(m config.Mesh, st node.State) []Change {
-	if !st.Authority.Present || st.Authority.Name == "" {
+	if len(st.Authorities) == 0 {
 		return nil
 	}
+
+	onNode := make(map[string]bool, len(st.Authorities))
+	for _, cert := range st.Authorities {
+		onNode[cert.Name] = true
+	}
+	trusted := make(map[string]bool, len(m.CA.Trust))
 	for _, name := range m.CA.Trust {
-		if name == st.Authority.Name {
-			return nil
+		trusted[name] = true
+	}
+
+	var changes []Change
+	for _, name := range m.CA.Trust {
+		if !onNode[name] {
+			changes = append(changes, Change{
+				Kind:   KindCertificate,
+				Detail: fmt.Sprintf("the node does not trust %s", name),
+			})
 		}
 	}
-	return []Change{{
-		Kind:   KindCertificate,
-		Detail: fmt.Sprintf("authority %s is not trusted", st.Authority.Name),
-	}}
+	for _, cert := range st.Authorities {
+		if !trusted[cert.Name] {
+			changes = append(changes, Change{
+				Kind:   KindCertificate,
+				Detail: fmt.Sprintf("authority %s is not trusted", cert.Name),
+			})
+		}
+	}
+	return changes
 }

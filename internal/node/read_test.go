@@ -76,9 +76,47 @@ func TestReadReturnsEveryFact(t *testing.T) {
 	if !st.Cert.Present || st.Cert.Name != "core-1" {
 		t.Errorf("certificate = %+v", st.Cert)
 	}
-	if !st.Authority.Present {
-		t.Error("authority missing")
+	if len(st.Authorities) != 1 || !st.Authorities[0].Present {
+		t.Errorf("authorities = %+v", st.Authorities)
 	}
+}
+
+func TestReadAuthoritiesReturnsTheWholeBundle(t *testing.T) {
+	m := testMesh()
+
+	certs, err := ReadAuthorities(context.Background(), m, m.Nodes[0], bundleNode{})
+	if err != nil {
+		t.Fatalf("ReadAuthorities: %v", err)
+	}
+	if len(certs) != 2 {
+		t.Fatalf("bundle holds %d authorities, want 2", len(certs))
+	}
+}
+
+func TestReadAuthoritiesNamesTheNodeWhenTheFileIsAbsent(t *testing.T) {
+	m := testMesh()
+
+	_, err := ReadAuthorities(context.Background(), m, m.Nodes[0], missingNode{})
+	if err == nil {
+		t.Fatal("ReadAuthorities accepted a node with no ca.crt")
+	}
+	if !strings.Contains(err.Error(), "core-1") || !strings.Contains(err.Error(), "ca.crt") {
+		t.Errorf("error does not name the node and the file: %v", err)
+	}
+}
+
+// bundleNode answers the authority read with a two document bundle.
+type bundleNode struct{}
+
+func (bundleNode) Run(context.Context, string) (Result, error) {
+	return Result{Stdout: bundleJSON}, nil
+}
+
+// missingNode answers the authority read as a node without ca.crt does.
+type missingNode struct{}
+
+func (missingNode) Run(context.Context, string) (Result, error) {
+	return Result{ExitCode: 1, Stderr: "open /etc/nebula/meshy-homelab/ca.crt: no such file or directory"}, nil
 }
 
 func TestReadNamesTheNodeWhenItFails(t *testing.T) {

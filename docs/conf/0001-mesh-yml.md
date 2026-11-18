@@ -75,8 +75,8 @@ The file that describes one mesh. `meshy` reads it from `<mesh>/mesh.yml`.
 - Required: no
 - Default: `[ca-1]`
 - Source: config file
-- Description: The authorities that every node trusts. `meshy ca init` writes this when the file does not name it.
-- Constraints: Each name must exist in the vault. A node accepts several at once.
+- Description: The authorities that every node trusts. `meshy ca init` writes this when the file does not name it. `apply` writes the certificate of every entry into the `ca.crt` of a node, in this order. A node accepts several at once. `meshy ca rotate --phase 1` adds the next authority to this list and changes no certificate. `meshy ca rotate --phase 3` removes one.
+- Constraints: Each name must exist in the vault. A file that names two authorities is mid rotation, and `meshy ca rotate --phase 1` refuses to add a third.
 
 ## `ca.active`
 
@@ -84,7 +84,7 @@ The file that describes one mesh. `meshy` reads it from `<mesh>/mesh.yml`.
 - Required: no
 - Default: `ca-1`
 - Source: config file
-- Description: The authority that signs new certificates. `meshy ca init` writes this when the file does not name it.
+- Description: The authority that signs new certificates. `meshy ca init` writes this when the file does not name it. A rotation changes it in phase 2, when every node already trusts both authorities.
 - Constraints: Must appear in `ca.trust`.
 
 ## `lighthouses`

@@ -70,6 +70,7 @@ Commands:
   plan       compare a mesh file with the nodes and report every difference
   apply      make every node match mesh.yml
   ca         create the certificate authority of the mesh
+  ca rotate  rotate the trust anchor, one phase at a time
   issue      mint a certificate for a node
   bootstrap  print the script that prepares a server node
   install    put the pinned Nebula release on the server nodes
@@ -82,7 +83,7 @@ Flags:
   --mesh <dir>   directory that holds mesh.yml (default ".")
 
 Planned:
-  status, ca rotate
+  status
 `)
 }
 

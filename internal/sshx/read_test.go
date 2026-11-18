@@ -183,8 +183,8 @@ func TestReadOverALocalServer(t *testing.T) {
 	if st.ConfigHash != strings.Repeat("cd", 32) {
 		t.Errorf("config hash = %q", st.ConfigHash)
 	}
-	if st.Cert.Fingerprint != "aa11bb22" || st.Authority.Fingerprint != "ffee0011" {
-		t.Errorf("certificates = %+v %+v", st.Cert, st.Authority)
+	if st.Cert.Fingerprint != "aa11bb22" || len(st.Authorities) != 1 || st.Authorities[0].Fingerprint != "ffee0011" {
+		t.Errorf("certificates = %+v %+v", st.Cert, st.Authorities)
 	}
 }
 

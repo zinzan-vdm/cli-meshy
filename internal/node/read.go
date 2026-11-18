@@ -49,8 +49,14 @@ func Commands(m config.Mesh, n config.Node) []string {
 		"nebula-cert print -json -path " + d + "/" + n.Name + ".crt",
 		"ip link show " + m.Interface,
 		"sha256sum " + d + "/config.yml",
-		"nebula-cert print -json -path " + d + "/ca.crt",
+		authorityCommand(m.Name),
 	}
+}
+
+// authorityCommand reads the certificate file that pki.ca names. The file holds
+// the whole trust bundle, so the command prints one document per authority.
+func authorityCommand(mesh string) string {
+	return "nebula-cert print -json -path " + Dir(mesh) + "/ca.crt"
 }
 
 // Read runs the read-only commands on one node and returns the state it finds.
@@ -126,20 +132,42 @@ func Read(ctx context.Context, m config.Mesh, n config.Node, ex Executor) (State
 	if res.ExitCode != 0 {
 		return State{}, fmt.Errorf("node %s: no certificate authority at %s/ca.crt: %s", n.Name, Dir(m.Name), strings.TrimSpace(res.Stderr))
 	}
-	ca, err := ParseCert(res.Stdout)
+	ca, err := ParseCerts(res.Stdout)
 	if err != nil {
 		return State{}, fmt.Errorf("node %s: %w", n.Name, err)
 	}
 
 	return State{
-		Name:       n.Name,
-		Version:    version,
-		Service:    service,
-		Interface:  present,
-		ConfigHash: hash,
-		Cert:       cert,
-		Authority:  ca,
+		Name:        n.Name,
+		Version:     version,
+		Service:     service,
+		Interface:   present,
+		ConfigHash:  hash,
+		Cert:        cert,
+		Authorities: ca,
 	}, nil
+}
+
+// ReadAuthorities returns the authorities that the trust bundle on one node
+// holds. A rotation reads this list back, because the list is the proof that the
+// node took the bundle.
+func ReadAuthorities(ctx context.Context, m config.Mesh, n config.Node, ex Executor) ([]Cert, error) {
+	cmd := authorityCommand(m.Name)
+	c, cancel := context.WithTimeout(ctx, Timeout)
+	defer cancel()
+
+	res, err := ex.Run(c, cmd)
+	if err != nil {
+		return nil, fmt.Errorf("node %s: %s: %w", n.Name, cmd, err)
+	}
+	if res.ExitCode != 0 {
+		return nil, fmt.Errorf("node %s: no certificate authority at %s/ca.crt: %s", n.Name, Dir(m.Name), strings.TrimSpace(res.Stderr))
+	}
+	certs, err := ParseCerts(res.Stdout)
+	if err != nil {
+		return nil, fmt.Errorf("node %s: %w", n.Name, err)
+	}
+	return certs, nil
 }
 
 // ReadAll reads every server node, four at a time. A node that fails is
