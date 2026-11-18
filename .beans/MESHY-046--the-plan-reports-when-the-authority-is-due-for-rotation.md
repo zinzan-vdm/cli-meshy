@@ -11,8 +11,6 @@ tags:
 created_at: 2026-11-18T22:44:43Z
 updated_at: 2026-11-18T23:20:00Z
 parent: MESHY-024
-blocked_by:
-    - MESHY-035
 ---
 
 ## Overview
@@ -26,6 +24,8 @@ blocked_by:
 Without this report, a rotation depends on a calendar that nobody checks. The epic cannot close until the plan states the age.
 
 The plan runs with a closed vault on a pull request from a fork, and a fork holds no secrets. The node trust bundle is the only source that works on every path. It is also the source that matters, because a rotation concerns what the nodes trust.
+
+Phase 3 arrives in [MESHY-035](MESHY-035--the-mesh-drops-the-old-authority.md). The plan names the next phase from the trust count and the issuer of each certificate. It reads no code from that ticket, so this task has no blocker.
 
 Part of [MESHY-024](MESHY-024--the-trust-anchor-rotates.md): the trust anchor rotates without downtime.
 
