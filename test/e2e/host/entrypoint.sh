@@ -4,7 +4,7 @@
 # systemd, so nothing here starts a unit.
 set -eu
 
-mkdir -p /run/sshd /root/.ssh
+mkdir -p /run/sshd /root/.ssh /etc/systemd/system /var/log
 chmod 0700 /run/sshd /root/.ssh
 
 # The runner holds the only private key. The compose file mounts the public key
