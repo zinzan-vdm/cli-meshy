@@ -18,6 +18,16 @@ Every step needs root on the node. `apply` runs as the node user over SSH, so it
 
 `apply` runs `sudo systemctl reload nebula@meshy-<mesh>.service`. The rule allows `reload` and `restart` of that unit and nothing else. A rule for `systemctl` alone would let the node user start any unit file that the account can write. So the rule lists two commands with the full unit name.
 
+`install` needs a third command, because `/usr/local/bin` belongs to root. That command names its source, its destination, its owner and its mode:
+
+```
+<install> -o root -g root -m 0755 /etc/nebula/meshy-<mesh>/nebula.incoming /usr/local/bin/nebula
+```
+
+sudo matches a command by its path and by its arguments. The node user can place that one file at that one path, and no other file anywhere. The binary reaches `<dir>/nebula.incoming` through the write path, as the node user, which needs no privilege. The rule holds three commands and no wildcard.
+
+A node that ran an older script holds a rule with two commands. `install` fails there until the maintainer runs `bootstrap` again, and the script replaces the rule when the text differs.
+
 The script writes the path of `systemctl` that the host resolves. sudo matches a command by its full path, and that path differs between distributions.
 
 ## Why the script writes the unit

@@ -55,6 +55,10 @@ Neither command needs the authority key. `bootstrap` never runs its script, and 
 - [MESHY-018](MESHY-018--a-person-joins-with-one-archive.md): the user device case, which is a bundle rather than a unit.
 - [ADR 0003](../docs/adr/0003-the-repository-is-the-mesh.md): the repository is the mesh.
 
+## Status
+
+All three commands exist: `bootstrap` in MESHY-027, `install` in MESHY-021, and `apply` in MESHY-014. The criterion below stays open until a run on an empty host is recorded, and the harness that records it is MESHY-030.
+
 ## Acceptance Criteria
 
 - [ ] An empty host runs the mesh after `bootstrap`, `install`, and `apply`, in that order.

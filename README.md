@@ -2,7 +2,7 @@
 
 `meshy` builds and maintains private overlay networks on top of Nebula. One git repository describes one mesh. A pull request plans the change, a merge applies it, and a GitHub Actions runner does the work. `meshy` also runs locally with the same code path.
 
-Status: pre-alpha. `init`, `validate`, `plan`, `ca init`, `issue`, `bootstrap`, `unlock`, `lock`, and `apply --node` work.
+Status: pre-alpha. `init`, `validate`, `plan`, `ca init`, `issue`, `bootstrap`, `install`, `unlock`, `lock`, and `apply --node` work.
 
 ## What it does
 
@@ -76,13 +76,29 @@ The script does five things on the host:
 
 1. It creates the user from `ssh.user`, unless the user exists.
 2. It creates `/etc/nebula/meshy-<mesh>/` with mode 0700 and gives it to the node user.
-3. It writes `/etc/sudoers.d/meshy-<mesh>` with one rule, which allows `reload` and `restart` of `nebula@meshy-<mesh>.service` and no other command. It checks the rule with `visudo` before it installs the file.
+3. It writes `/etc/sudoers.d/meshy-<mesh>` with one rule, which allows `reload` and `restart` of `nebula@meshy-<mesh>.service`, and one `install` that places `/usr/local/bin/nebula` from `/etc/nebula/meshy-<mesh>/nebula.incoming`. It checks the rule with `visudo` before it installs the file.
 4. It writes `/etc/systemd/system/nebula@meshy-<mesh>.service` and enables it.
 5. It runs `systemctl daemon-reload`, then restarts the unit only when it changed and was active.
 
 A second run changes nothing, so the same command repairs a node.
 
 The order for one host is `bootstrap`, then `meshy install`, then `meshy apply`. `bootstrap` refuses a user node, because a user node gets a bundle rather than a unit. The decisions behind the script are in [docs/adr/0009](docs/adr/0009-the-bootstrap-script-owns-the-host.md).
+
+### Install the pinned release
+
+`install` puts the release that `mesh.yml` pins on every server node, and restarts only the nodes that moved:
+
+```sh
+meshy install
+meshy install --node web-1
+meshy install --source ./dist
+```
+
+The mesh file is the only place a version is written. `install` reads `nebula.version`, asks each node what it runs with `uname -s` and `uname -m`, and fetches that platform once. It compares the archive with the digest that the project publishes, keeps only `nebula` in `.meshy/bin/<version>/<os>-<arch>/`, and sends that binary to `/usr/local/bin/nebula` on each node.
+
+A node that already reports the pin is left alone. A node that fails is reported, the run continues, and the run exits 1. `--source` reads the archives from a directory and makes no network call. The cache sits inside `.meshy`, so `meshy lock` empties it.
+
+The binary reaches the node as the node user, and one command places it as root. That command names its source, its destination, its owner, and its mode, so the node user cannot place another file. The rules are in [docs/patterns/0012](docs/patterns/0012-the-release-is-verified-before-a-node-sees-it.md) and [0013](docs/patterns/0013-the-node-places-the-binary-through-one-exact-rule.md).
 
 ### Apply the config to one node
 
@@ -100,7 +116,7 @@ The vault must be open, and it must hold a certificate for the node. A missing c
 
 The exit code is 0 when the node matches or was updated. It is 1 when the node failed or the unit is missing. It is 2 when the run never started. `--node` is required, and this build writes one node per run.
 
-The write runs as the node user and needs no sudo. Only the reload uses `sudo -n systemctl reload`. The two rules are in [docs/patterns/0009](docs/patterns/0009-a-write-to-a-node-replaces-the-file-by-rename.md) and [0010](docs/patterns/0010-the-unit-reloads-once-after-the-last-write.md).
+The write runs as the node user and needs no sudo. Only the unit command uses `sudo`: a reload when the unit runs, and a restart when it does not. The rules are in [docs/patterns/0009](docs/patterns/0009-a-write-to-a-node-replaces-the-file-by-rename.md), [0010](docs/patterns/0010-the-unit-reloads-once-after-the-last-write.md), and [0011](docs/patterns/0011-a-stopped-unit-is-started-not-reloaded.md).
 
 ## Commands
 
@@ -113,7 +129,7 @@ The write runs as the node user and needs no sudo. Only the reload uses `sudo -n
 | `issue` | works |
 | `plan` | works |
 | `apply` | works for one node |
-| `install` | planned |
+| `install` | works |
 | `bundle` | planned |
 | `bootstrap` | works |
 | `ca rotate` | planned |

@@ -1,7 +1,9 @@
 apply
+binaries
 ci
 code
 comments
+install
 keys
 licence
 nebula

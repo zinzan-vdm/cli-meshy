@@ -81,18 +81,48 @@ func TestScriptAllowsReloadAndRestartOfThatUnitOnly(t *testing.T) {
 		"NOPASSWD:",
 		"$SYSTEMCTL reload $UNIT.service",
 		"$SYSTEMCTL restart $UNIT.service",
+		"$INSTALL -o root -g root -m 0755 $DIR/nebula.incoming /usr/local/bin/nebula",
 	} {
 		if !strings.Contains(rule, want) {
 			t.Errorf("the rule does not hold %q: %s", want, rule)
 		}
 	}
 	if got := strings.Count(rule, "$SYSTEMCTL"); got != 2 {
-		t.Errorf("the rule holds %d commands, want 2: %s", got, rule)
+		t.Errorf("the rule holds %d unit commands, want 2: %s", got, rule)
+	}
+	if got := strings.Count(rule, "$INSTALL"); got != 1 {
+		t.Errorf("the rule holds %d install commands, want 1: %s", got, rule)
 	}
 	for _, other := range []string{" start", " stop", " status", " enable", " disable", "*"} {
 		if strings.Contains(rule, other) {
 			t.Errorf("the rule also allows %q: %s", other, rule)
 		}
+	}
+}
+
+func TestScriptPlacesTheBinaryThroughOneExactCommand(t *testing.T) {
+	body := render(t, testMesh(), serverNode())
+
+	rule := ""
+	for _, line := range strings.Split(body, "\n") {
+		if strings.Contains(line, "ALL=(root)") {
+			rule = line
+		}
+	}
+
+	// The source, the destination, the owner and the mode are named, so the node
+	// user cannot place another file or place this one as another owner.
+	for _, want := range []string{
+		"-o root -g root -m 0755",
+		"$DIR/nebula.incoming",
+		"/usr/local/bin/nebula",
+	} {
+		if !strings.Contains(rule, want) {
+			t.Errorf("the rule does not hold %q: %s", want, rule)
+		}
+	}
+	if strings.Contains(rule, "sudo sh") || strings.Contains(rule, "/bin/sh") {
+		t.Errorf("the rule holds a shell: %s", rule)
 	}
 }
 

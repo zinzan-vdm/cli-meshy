@@ -69,7 +69,7 @@ if [ "$(id -u)" -ne 0 ]; then
 	exit 1
 fi
 
-for tool in systemctl useradd visudo stat; do
+for tool in systemctl useradd visudo stat install; do
 	if ! command -v "$tool" >/dev/null 2>&1; then
 		echo "meshy bootstrap: $tool is not on PATH, so this host cannot become a node" >&2
 		exit 1
@@ -79,6 +79,7 @@ done
 # sudo matches a full command path, so the rule holds the path this host
 # resolves rather than a path from another distribution.
 SYSTEMCTL=$(command -v systemctl)
+INSTALL=$(command -v install)
 
 SUDOERS_TMP="$SUDOERS.meshy-tmp"
 UNIT_TMP="$UNIT_FILE.meshy-tmp"
@@ -94,10 +95,12 @@ if [ "$(stat -c %U "$DIR")" != "$USER_NAME" ]; then
 	chown "$USER_NAME:$USER_NAME" "$DIR"
 fi
 
-# apply runs systemctl as the node user through sudo, so the rule lists the
-# two verbs it uses and nothing else. See docs/adr/0009.
+# The node user reaches root through three commands and nothing else: the two
+# unit verbs that apply runs, and the one install that places the binary. The
+# install names its source, its destination, its owner and its mode, so the rule
+# holds no wildcard and no shell. See docs/adr/0009.
 printf '%s\n' "# meshy bootstrap for node {{.Node}}. The node user reloads and restarts one unit." > "$SUDOERS_TMP"
-printf '%s\n' "$USER_NAME ALL=(root) NOPASSWD: $SYSTEMCTL reload $UNIT.service, $SYSTEMCTL restart $UNIT.service" >> "$SUDOERS_TMP"
+printf '%s\n' "$USER_NAME ALL=(root) NOPASSWD: $SYSTEMCTL reload $UNIT.service, $SYSTEMCTL restart $UNIT.service, $INSTALL -o root -g root -m 0755 $DIR/nebula.incoming {{.Binary}}" >> "$SUDOERS_TMP"
 chmod 0440 "$SUDOERS_TMP"
 visudo -cf "$SUDOERS_TMP" >/dev/null
 if cmp -s "$SUDOERS_TMP" "$SUDOERS"; then
