@@ -1,14 +1,14 @@
 ---
 # MESHY-024
 title: The trust anchor rotates without downtime
-status: todo
+status: completed
 type: epic
 priority: low
 tags:
     - ca
     - rotation
 created_at: 2026-11-17T19:22:37Z
-updated_at: 2026-11-17T20:54:22Z
+updated_at: 2026-11-18T23:55:00Z
 ---
 ## Overview
 
@@ -44,9 +44,24 @@ Three changes, in order:
 
 ## Acceptance Criteria
 
-- [ ] The plan reports the age of the active authority and the next phase.
-- [ ] A mesh can hold two trusted authorities and keep working.
-- [ ] Every node holds a certificate from the new authority after phase 2.
-- [ ] Phase 3 is refused while a node still carries an old certificate.
-- [ ] No phase drops a tunnel that stays within the mesh.
-- [ ] A full rotation is tested against two nodes before release.
+- [x] The plan reports the age of the active authority and the next phase.
+- [x] A mesh can hold two trusted authorities and keep working.
+- [x] Every node holds a certificate from the new authority after phase 2.
+- [x] Phase 3 is refused while a node still carries an old certificate.
+- [x] No phase drops a tunnel that stays within the mesh.
+- [x] A full rotation is tested against two nodes before release.
+
+## Status
+
+All six criteria are proved. Two of them come from a plan run, and four from live runs against two containers.
+
+| Criterion | Evidence |
+|---|---|
+| The plan reports the age of the active authority and the next phase | MESHY-046, merged. `meshy plan` prints the block, and `TestPlanPrintsTheAgeOfTheAuthority` runs the command against a test node. |
+| A mesh holds two trusted authorities and keeps working | run `44423734094` line 4, then line 7: 0 of 9 replies lost while both authorities were trusted. |
+| Every node holds a certificate from the new authority after phase 2 | run `44423734094` lines 6 and 8, with the fingerprints read back. |
+| Phase 3 is refused while a node carries an old certificate | run `44423734094` line 9. |
+| No phase drops a tunnel that stays within the mesh | run `44423734094` line 7 for phase 2, line 10 for phase 3, 0 of 9 and 0 of 10 replies lost. |
+| A full rotation is tested against two nodes before release | the `live rotation` job, which builds two containers, a vault, and a tunnel in the run. |
+
+A rotation is three commands. Phase 1 adds the trust, phase 2 changes the active authority and signs again, and phase 3 drops the old authority. The old key stays in the vault, and ADR 0015 records why.
