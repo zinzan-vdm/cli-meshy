@@ -55,15 +55,18 @@ on() {
 		-o BatchMode=yes -o ConnectTimeout=5 -o LogLevel=ERROR "$target" "$@"
 }
 
+# scan writes every key type that a node offers. meshy checks the key that the
+# handshake presents, and a file with one type fails when the client asks for
+# another.
 scan() {
 	name=$1
 	tries=0
-	until ssh-keyscan -T 2 -t ed25519 "$name" 2>/dev/null | grep -q .; do
+	until ssh-keyscan -T 2 "$name" 2>/dev/null | grep -q .; do
 		tries=$((tries + 1))
 		[ "$tries" -ge 60 ] && fail "no sshd on $name after 60 tries"
 		sleep 1
 	done
-	ssh-keyscan -T 2 -t ed25519 "$name" 2>/dev/null >>"$KNOWN"
+	ssh-keyscan -T 2 "$name" 2>/dev/null >>"$KNOWN" || true
 }
 
 wait_login() {
