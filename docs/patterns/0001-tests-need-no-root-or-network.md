@@ -23,3 +23,5 @@ Bad: a test starts three Nebula processes and pings across the overlay. That bel
 `go test ./...` in the `ci` job runs with no elevated rights. A test that needs them fails there, which is the signal.
 
 A test that needs a node uses `internal/sshx/sshtest`. The harness serves SSH over a pipe and opens no port.
+
+A test that needs a live mesh lives in `test/e2e` and runs in the `e2e` job. That job is the only place that creates `/dev/net/tun`, and it is separate from `ci` so a mesh failure is legible.

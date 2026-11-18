@@ -1,0 +1,59 @@
+# The live mesh of MESHY-031. One lighthouse, one server node, one user node,
+# and the harness. The configs come from test/e2e/generated, which
+# test/e2e/generate writes through internal/nebula.
+name: meshy-e2e
+
+services:
+  lighthouse:
+    image: meshy-e2e:local
+    build:
+      context: .
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun
+    volumes:
+      - ./generated/lighthouse:/etc/nebula/meshy-lab:ro
+    command: ["nebula", "-config", "/etc/nebula/meshy-lab/config.yml"]
+
+  node-a:
+    image: meshy-e2e:local
+    build:
+      context: .
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun
+    volumes:
+      # The control mode swaps config-allow.yml into place and sends SIGHUP.
+      - ./generated/node-a:/etc/nebula/meshy-lab
+    command:
+      - harness
+      - control
+      - -config
+      - /etc/nebula/meshy-lab/config.yml
+      - -allow
+      - /etc/nebula/meshy-lab/config-allow.yml
+
+  node-b:
+    image: meshy-e2e:local
+    build:
+      context: .
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun
+    volumes:
+      - ./generated/node-b:/etc/nebula/meshy-lab:ro
+    command: ["nebula", "-config", "/etc/nebula/meshy-lab/config.yml"]
+
+  harness:
+    image: meshy-e2e:local
+    build:
+      context: .
+    # The probes must leave from node-b, so the harness joins its namespace.
+    network_mode: "service:node-b"
+    depends_on:
+      - node-a
+      - node-b
+    command: ["harness", "assert"]

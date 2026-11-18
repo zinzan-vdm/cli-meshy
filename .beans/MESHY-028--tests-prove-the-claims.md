@@ -1,14 +1,14 @@
 ---
 # MESHY-028
 title: Tests prove the claims
-status: todo
+status: completed
 type: epic
 priority: high
 tags:
     - tests
     - ci
 created_at: 2026-11-17T20:01:50Z
-updated_at: 2026-11-17T20:54:22Z
+updated_at: 2026-11-18T15:30:00Z
 ---
 ## Overview
 
@@ -46,9 +46,21 @@ Tier 3 is draft. Tiers 1 and 2 are the work.
 
 ## Acceptance Criteria
 
-- [ ] `go test ./...` passes on a machine with no network, no root, and no docker.
-- [ ] The whole suite finishes in under ten seconds.
-- [ ] The renderer has a golden file test.
-- [ ] The rule expansion has a table test for every case in MESHY-010.
-- [ ] The apply path is tested against an in-process SSH server.
-- [ ] Tier 3 runs in its own CI job and does not block a merge while it is draft.
+- [x] `go test ./...` passes on a machine with no network, no root, and no docker.
+- [x] The whole suite finishes in under ten seconds.
+- [x] The renderer has a golden file test.
+- [x] The rule expansion has a table test for every case in MESHY-010.
+- [x] The apply path is tested against an in-process SSH server.
+- [x] Tier 3 runs in its own CI job and does not block a merge while it is draft.
+
+## Status
+
+All three tasks are complete. Tier 1 and tier 2 run in the unit job, on a machine with no network, no root, and no Docker. Tier 3 runs in its own job and needs a container runtime.
+
+| Tier | Where | Ticket |
+|---|---|---|
+| 1: validator, renderer, rule expansion, planner | `go test ./...` | MESHY-029 |
+| 2: read, write, reload, idempotency, against an SSH server in the process | `go test ./...` | MESHY-030 |
+| 3: handshake, allowed port, denied port, live reload | `.github/workflows/e2e.yml` | MESHY-031 |
+
+The tier 3 job ran green on run `44328649764` and printed one line for each of its four assertions. Tier 3 does not block a merge today, because it has one recorded run. The team can make it required once it has run green a few times.
