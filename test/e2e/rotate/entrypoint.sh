@@ -13,6 +13,9 @@ install -d -o meshy -g meshy -m 0700 /home/meshy/.ssh
 install -o meshy -g meshy -m 0600 "$key" /home/meshy/.ssh/authorized_keys
 
 mkdir -p /run/sshd /etc/nebula /etc/systemd/system /var/log
+# bootstrap creates this directory on a real node, and meshy writes the config
+# into it. The fixture stands where bootstrap stands.
+install -d -o meshy -g meshy -m 0700 /etc/nebula/meshy-rot
 
 # The unit that meshy checks before it writes. The shim answers for it.
 printf '[Unit]\nDescription=nebula meshy-rot\n' > /etc/systemd/system/nebula@meshy-rot.service
