@@ -80,22 +80,32 @@ jobs:
           install -m 0644 "$RUNNER_TEMP/meshy_key.pub" test/e2e/rotate/run/authorized_key
       - name: Start the nodes
         run: docker compose -f test/e2e/rotate/compose.yml up -d
-      - name: Scan the host keys
+      # The known hosts file comes from the key that each container presents. A
+      # scan races the daemon, and a key that another process answers with does
+      # not match the tunnel that meshy opens.
+      - name: Write the known hosts
         run: |
-          for _ in $(seq 1 60); do
-            rm -f "$RUNNER_TEMP/known_hosts"
-            # ssh-keyscan exits 1 while a port is still closed, and the loop
-            # must wait rather than abort.
-            ssh-keyscan -p 2221 -t ed25519 127.0.0.1 >> "$RUNNER_TEMP/known_hosts" 2>/dev/null || true
-            ssh-keyscan -p 2222 -t ed25519 127.0.0.1 >> "$RUNNER_TEMP/known_hosts" 2>/dev/null || true
-            if grep -qF "[127.0.0.1]:2221" "$RUNNER_TEMP/known_hosts" && grep -qF "[127.0.0.1]:2222" "$RUNNER_TEMP/known_hosts"; then
-              exit 0
+          : > "$RUNNER_TEMP/known_hosts"
+          for pair in "node-a 2221" "node-b 2222"; do
+            set -- $pair
+            service=$1
+            port=$2
+            key=""
+            for _ in $(seq 1 60); do
+              key="$(docker compose -f test/e2e/rotate/compose.yml exec -T "$service" cat /etc/ssh/ssh_host_ed25519_key.pub 2>/dev/null || true)"
+              if [ -n "$key" ]; then
+                break
+              fi
+              sleep 2
+            done
+            if [ -z "$key" ]; then
+              echo "::error::$service holds no ed25519 host key"
+              docker compose -f test/e2e/rotate/compose.yml logs "$service"
+              exit 1
             fi
-            sleep 2
+            printf '[127.0.0.1]:%s %s\n' "$port" "$key" >> "$RUNNER_TEMP/known_hosts"
           done
-          echo "::error::the sshd of a node did not answer"
-          docker compose -f test/e2e/rotate/compose.yml logs
-          exit 1
+          cat "$RUNNER_TEMP/known_hosts"
       - name: Run the rotation
         run: |
           mkdir -p "$RUNNER_TEMP/mesh"
