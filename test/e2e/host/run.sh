@@ -93,13 +93,14 @@ binary_sum() {
 # catch.
 bootstrap_node() {
 	name=$1
+	host=$2
 	"$MESHY" bootstrap "$name" --mesh "$MESH" >"/work/$name.sh"
 	[ -s "/work/$name.sh" ] || fail "bootstrap printed nothing for $name"
-	on "root@$name" sh -s <"/work/$name.sh"
+	on "root@$host" sh -s <"/work/$name.sh"
 
-	on "root@$name" 'install -d -m 0700 -o meshy -g meshy /home/meshy/.ssh && install -m 0600 -o meshy -g meshy /run/keys/authorized_keys /home/meshy/.ssh/authorized_keys'
+	on "root@$host" 'install -d -m 0700 -o meshy -g meshy /home/meshy/.ssh && install -m 0600 -o meshy -g meshy /run/keys/authorized_keys /home/meshy/.ssh/authorized_keys'
 
-	on "meshy@$name" true || fail "the node user cannot run a command on $name"
+	on "meshy@$host" true || fail "the node user cannot run a command on $host"
 }
 
 install_node() {
@@ -136,7 +137,9 @@ if [ -e "$MESH/.meshy/age.identity" ]; then
 fi
 printf 'note: the vault is sealed and holds no share in the environment\n'
 
-bootstrap_node "$HOST"
+# The mesh names the node, and the compose file names the host that serves it.
+# They differ, so every call passes both.
+bootstrap_node "$NODE" "$HOST"
 
 uid=$(on "root@$HOST" 'id -u meshy')
 case "$uid" in
@@ -181,7 +184,7 @@ calls_after=$(calls "$HOST")
 [ "$calls_before" = "$calls_after" ] || fail "the second bootstrap recorded $calls_after calls, was $calls_before"
 printf 'ok 2 a second bootstrap changed nothing: tree %s, %s recorded calls\n' "$tree_before" "$calls_before"
 
-install_node "$HOST"
+install_node "$NODE"
 want=$(awk '$2 == "nebula-linux-amd64.tar.gz/nebula" { print $1 }' "$RELEASE/SHASUM256.txt")
 [ -n "$want" ] || fail "SHASUM256.txt names no member of the archive"
 got=$(binary_sum "$HOST")
@@ -192,9 +195,10 @@ on "root@$HOST" "grep -qx 'restart $UNIT' /var/log/meshy-systemctl.log" ||
 	fail "install did not restart $UNIT"
 printf 'ok 3 install placed %s at /usr/local/bin/nebula and restarted %s\n' "$PIN" "$UNIT"
 
-# The lighthouse is the peer of the join. It takes the same three commands, and
-# it starts when apply writes its config.
-bootstrap_node "$LIGHTHOUSE"
+# The lighthouse is the peer of the join. It takes the same three commands and
+# starts when apply writes its config. Its mesh name and its ssh host are the
+# same word.
+bootstrap_node "$LIGHTHOUSE" "$LIGHTHOUSE"
 install_node "$LIGHTHOUSE"
 
 i=0
