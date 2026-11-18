@@ -425,6 +425,13 @@ func rotatePhase3(meshDir string) int {
 		fmt.Fprintln(os.Stderr, "meshy ca rotate: the rotation is already complete")
 		return 1
 	}
+	// Phase 3 drops the authority that the nodes no longer use. Before phase 2
+	// the newest authority holds no certificate, so dropping it would undo
+	// phase 1 and leave the mesh with the authority that it is leaving.
+	if newest := ca.NewActive(mesh.CA.Trust, mesh.CA.Active); newest != "" {
+		fmt.Fprintln(os.Stderr, "meshy ca rotate: run phase 2 first")
+		return 1
+	}
 
 	old := oldAuthority(mesh.CA)
 	if old == "" {

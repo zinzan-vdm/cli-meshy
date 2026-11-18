@@ -65,7 +65,7 @@ func run(args []string) int {
 		fmt.Fprintf(os.Stderr, "rotate: %v\n", err)
 		return 1
 	}
-	fmt.Println("rotate: 10 assertions passed")
+	fmt.Println("rotate: 11 assertions passed")
 	return 0
 }
 
@@ -105,16 +105,16 @@ func (c *cluster) rotate() error {
 	}
 	pass(4, "phase 1 gives both nodes the trust bundle of ca-1 and ca-2")
 
-	// Both nodes still hold a certificate that ca-1 signed, so phase 3 must
-	// refuse and must leave the mesh file alone.
-	refused, err := c.meshyRun("ca", "rotate", "--phase", "3", "--mesh", c.meshDir)
+	// The mesh has not promoted ca-2 yet, so phase 3 would drop the authority
+	// that the mesh is moving to.
+	early, err := c.meshyRun("ca", "rotate", "--phase", "3", "--mesh", c.meshDir)
 	if err == nil {
-		return fmt.Errorf("phase 3 ran while node-a still held a certificate from ca-1")
+		return fmt.Errorf("phase 3 ran before phase 2")
 	}
-	if !strings.Contains(refused, "still holds a certificate from") {
-		return fmt.Errorf("phase 3 refused without naming the node and its authority: %s", strings.TrimSpace(refused))
+	if !strings.Contains(early, "run phase 2 first") {
+		return fmt.Errorf("phase 3 refused without naming phase 2: %s", strings.TrimSpace(early))
 	}
-	pass(5, "phase 3 refuses while a node still holds a certificate from ca-1")
+	pass(5, "phase 3 refuses before phase 2 has made ca-2 active")
 
 	// The ping runs through phase 2, so a reload that drops the tunnel would
 	// show as a lost reply.
@@ -177,6 +177,30 @@ func (c *cluster) rotate() error {
 	}
 	pass(8, "every node signs with ca-2 (%s)", short(second.Fingerprint))
 
+	// A stopped phase 2 leaves a node on its old pair. The scenario builds that
+	// state by putting the pair that phase 2 kept back on node-a, and puts the
+	// current pair back after the refusal.
+	if err := c.put("node-a", "node-a.crt.previous.ca-1", "node-a.crt"); err != nil {
+		return err
+	}
+	if err := c.put("node-a", "node-a.key.previous.ca-1", "node-a.key"); err != nil {
+		return err
+	}
+	refused, err := c.meshyRun("ca", "rotate", "--phase", "3", "--mesh", c.meshDir)
+	if err == nil {
+		return fmt.Errorf("phase 3 ran while node-a held a certificate from ca-1")
+	}
+	if !strings.Contains(refused, "still holds a certificate from") {
+		return fmt.Errorf("phase 3 refused without naming the node and its authority: %s", strings.TrimSpace(refused))
+	}
+	if err := c.put("node-a", "node-a.crt", "node-a.crt"); err != nil {
+		return err
+	}
+	if err := c.put("node-a", "node-a.key", "node-a.key"); err != nil {
+		return err
+	}
+	pass(9, "phase 3 refuses while node-a holds a certificate from ca-1")
+
 	// Phase 3 drops the authority while the tunnel carries traffic, so a node
 	// that loses its trust would show as a lost reply.
 	if err := c.startPing(); err != nil {
@@ -203,7 +227,7 @@ func (c *cluster) rotate() error {
 	if !strings.Contains(phase3, "the rotation is complete") {
 		return fmt.Errorf("phase 3 did not report a complete rotation: %s", strings.TrimSpace(phase3))
 	}
-	pass(9, "phase 3 removes ca-1 and the tunnel lost 0 of %d replies", sent3)
+	pass(10, "phase 3 removes ca-1 and the tunnel lost 0 of %d replies", sent3)
 
 	if err := c.waitForOneAuthority("node-a"); err != nil {
 		return err
@@ -218,7 +242,7 @@ func (c *cluster) rotate() error {
 	if _, err := os.Stat(filepath.Join(c.meshDir, vault.DirName, "ca-1.key")); err != nil {
 		return fmt.Errorf("the vault dropped ca-1.key: %w", err)
 	}
-	pass(10, "both nodes trust ca-2 alone (%s) and ca-1.key stays in the vault", short(last.Fingerprint))
+	pass(11, "both nodes trust ca-2 alone (%s) and ca-1.key stays in the vault", short(last.Fingerprint))
 	return nil
 }
 
@@ -360,6 +384,23 @@ func (c *cluster) meshyRun(args ...string) (string, error) {
 		return string(out), fmt.Errorf("meshy %s: %v: %s", strings.Join(args, " "), err, strings.TrimSpace(string(out)))
 	}
 	return string(out), nil
+}
+
+// put copies a file from the vault of this run onto a node. The scenario uses
+// it to build the state that a stopped phase leaves behind, and to undo that
+// state afterwards.
+func (c *cluster) put(service, from, name string) error {
+	source := filepath.Join(c.meshDir, vault.DirName, from)
+	if _, err := os.Stat(source); err != nil {
+		return fmt.Errorf("the vault holds no %s: %w", from, err)
+	}
+	target := service + ":" + dirName + "/" + name
+	full := []string{"compose", "-f", c.compose, "cp", source, target}
+	out, err := exec.Command("docker", full...).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("docker %s: %v: %s", strings.Join(full, " "), err, strings.TrimSpace(string(out)))
+	}
+	return nil
 }
 
 func (c *cluster) composeRun(service string, args ...string) (string, error) {

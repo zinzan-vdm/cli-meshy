@@ -817,3 +817,47 @@ func TestCARotatePhase3ReportsANodeThatKeptTheOldAuthority(t *testing.T) {
 		t.Error("the phase called a rotation complete while a bundle still held the old authority")
 	}
 }
+
+func TestCARotatePhase3RefusesBeforePhase2(t *testing.T) {
+	// Both authorities are trusted and ca-1 still signs, which is the state
+	// that phase 1 leaves behind. Phase 3 would drop ca-2, the authority that
+	// the mesh is moving to.
+	dir := rotatedMeshDir(t, "ca-1")
+	openRotateVault(t, dir, "core-1", "web-1")
+	stubSigner(t)
+	t.Setenv("MESHY_KNOWN_HOSTS", filepath.Join(dir, "known_hosts"))
+	nodes := useFakes(t, "core-1", "web-1")
+	for _, name := range []string{"core-1", "web-1"} {
+		rotateNode(nodes, name, "ca-1", "ca-2")
+		rotateCert(nodes, name, "4f3a")
+	}
+
+	path := filepath.Join(dir, config.FileName)
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read mesh: %v", err)
+	}
+
+	stderr, code := captureErr(t, func() int {
+		return run([]string{"ca", "rotate", "--phase", "3", "--mesh", dir})
+	})
+	if code != 1 {
+		t.Errorf("exit = %d, want 1", code)
+	}
+	if !strings.Contains(stderr, "run phase 2 first") {
+		t.Errorf("message = %q, want the phase before this one", stderr)
+	}
+
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read mesh: %v", err)
+	}
+	if string(after) != string(before) {
+		t.Error("the refused phase changed mesh.yml")
+	}
+	for _, name := range []string{"core-1", "web-1"} {
+		if nodes[name].writes != 0 {
+			t.Errorf("%s took a write from a refused phase", name)
+		}
+	}
+}
