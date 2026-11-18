@@ -86,3 +86,7 @@ Deviations:
 - The script also runs `systemctl enable` on the unit, inside the branch that installs a changed file. The specification stops at `daemon-reload`. Without `enable`, a node that `meshy install` starts comes back down after a reboot, which is the half working node that this ticket exists to prevent.
 - The script gives `/etc/nebula/meshy-<mesh>/` to the node user. The specification sets the mode and says nothing about the owner. `apply` writes `config.yml` into that directory as the node user, and mode 0700 means nobody else can.
 - The unit template lives in `internal/bootstrap`. The ticket says it is the same template that the Linux installer ships, but `internal/scaffold/installers/` does not exist yet, because MESHY-018 has not started. When MESHY-018 lands, the two must share one template.
+
+## Note
+
+MESHY-043 found a defect in this script. The node user was created with `/usr/sbin/nologin`, and sshd refuses a remote command for that shell. So `install` and `apply` could not reach a host that the script had just prepared. The script now sets `/bin/sh` and repairs a host that an older copy prepared. ADR 0009 records the decision, and `internal/bootstrap/bootstrap_test.go` holds both lines.

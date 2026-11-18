@@ -94,6 +94,9 @@ Files:
 - `.github/workflows/host.yml`: one job. It verifies the pin, builds the binary and both images, runs the scenario under `timeout 300`, and tears down with `down -v` in an `if: always()` step.
 - `.gitignore`: ignores `test/e2e/host/.build/`.
 - `docs/patterns/0022-a-recorder-stands-in-for-systemd.md`, `docs/adr/0013-the-empty-host-run-is-its-own-scenario.md`.
+- `internal/bootstrap/bootstrap.go`: the node user holds `/bin/sh`, and the script repairs a host that holds a shell which refuses every command. `sshd` runs a remote command through the shell of the account, so `/usr/sbin/nologin` made a prepared host unreachable to `install`, `apply`, and `rotate`.
+- `internal/bootstrap/bootstrap_test.go`: one test holds the shell, and one test holds the repair.
+- `docs/adr/0009-the-bootstrap-script-owns-the-host.md`: the section that records the defect and the decision.
 
 Decisions:
 
@@ -109,6 +112,7 @@ Gates on this host: `gofmt -l .` silent, `go build ./...`, `go vet ./...`, `go t
 ## Deviations
 
 - The unit is not started by real systemd. The recorder answers the unit calls, and a supervise loop starts Nebula from the path and the config that the unit names. A real virtual machine adds one assertion: the unit reports `active`, it owns the process, and that process runs as `User=meshy`. The loop runs as root.
-- `bootstrap` gives the node user `/usr/sbin/nologin`, and sshd refuses a command for that shell. The run copies the public key as root and then runs `usermod -s /bin/sh meshy`. The product is unchanged. The shell of the node user needs a decision, because `install` and `apply` reach the node as that user.
+- The first version of `bootstrap` gave the node user `/usr/sbin/nologin`, and sshd refuses a command for that shell. The run found it on the first pass, because it runs the script and then opens the session as that user. The script now sets `/bin/sh`. It also repairs a host that an older script prepared, because that host keeps a shell that denies every command. ADR 0009 records why. No workaround stays in the run, so assertion 1 covers the defect.
+- The shell change reaches a host that runs the script again. A host that lost its route to the repository cannot be repaired by the repository. Every other step holds the same limit.
 - The scenario and the job have not run. This host has no docker and no `/dev/net/tun`. The job passes on a runner, and the criteria stay open until it does.
 - `docs/conf/0004` is unused. The scenario adds no configuration variable. Every value comes from `mesh.yml`, the compose file, or the workflow.

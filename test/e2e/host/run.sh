@@ -86,9 +86,11 @@ binary_sum() {
 	on "root@$1" 'if [ -x /usr/local/bin/nebula ]; then sha256sum /usr/local/bin/nebula | cut -d" " -f1; else printf "absent\n"; fi'
 }
 
-# bootstrap_node prints the script for one node and runs it as root over ssh. The
-# node user then needs the key and a shell that sshd will run: bootstrap sets
-# nologin, which sshd refuses for a command.
+# bootstrap_node prints the script for one node and runs it as root over ssh.
+# The node user then needs the key that the run places for it. The shell comes
+# from the script, and the run checks that it runs a command rather than
+# repairing it, because a repair would hide the defect that this run exists to
+# catch.
 bootstrap_node() {
 	name=$1
 	"$MESHY" bootstrap "$name" --mesh "$MESH" >"/work/$name.sh"
@@ -97,11 +99,7 @@ bootstrap_node() {
 
 	on "root@$name" 'install -d -m 0700 -o meshy -g meshy /home/meshy/.ssh && install -m 0600 -o meshy -g meshy /run/keys/authorized_keys /home/meshy/.ssh/authorized_keys'
 
-	if ! on "meshy@$name" true 2>/dev/null; then
-		printf 'note: sshd refuses a command for the nologin shell that bootstrap sets, so the run sets /bin/sh for %s\n' "$name"
-		on "root@$name" 'usermod -s /bin/sh meshy'
-		on "meshy@$name" true || fail "the node user cannot run a command on $name"
-	fi
+	on "meshy@$name" true || fail "the node user cannot run a command on $name"
 }
 
 install_node() {

@@ -126,6 +126,43 @@ func TestScriptPlacesTheBinaryThroughOneExactCommand(t *testing.T) {
 	}
 }
 
+func TestScriptGivesTheNodeUserAShellThatRunsACommand(t *testing.T) {
+	body := render(t, testMesh(), serverNode())
+
+	// sshd runs a command through the shell of the account, and it refuses the
+	// command when the shell is nologin. This repository reaches every node as
+	// this user, so the shell is part of the contract.
+	line := ""
+	for _, l := range strings.Split(body, "\n") {
+		if strings.Contains(l, "useradd") {
+			line = l
+		}
+	}
+	if line == "" {
+		t.Fatal("the script does not create the node user")
+	}
+	if strings.Contains(line, "nologin") {
+		t.Errorf("the node user cannot run a command: %s", line)
+	}
+	if !strings.Contains(line, "--shell /bin/sh") {
+		t.Errorf("the node user holds no shell that runs a command: %s", line)
+	}
+}
+
+func TestScriptRepairsAShellThatRefusesEveryCommand(t *testing.T) {
+	body := render(t, testMesh(), serverNode())
+
+	// A host that ran an older script keeps a shell that denies every command.
+	// The user exists, so the create block is skipped, and the repair carries
+	// the host back to a shell that sshd will run.
+	if !strings.Contains(body, `usermod --shell /bin/sh "$USER_NAME"`) {
+		t.Error("the script does not repair the shell of a node user that already exists")
+	}
+	if !strings.Contains(body, `SHELL_NOW=`) {
+		t.Error("the script repairs the shell without reading the shell that the host holds")
+	}
+}
+
 func TestScriptGuardsEveryChangeSoASecondRunDoesNothing(t *testing.T) {
 	body := render(t, testMesh(), serverNode())
 

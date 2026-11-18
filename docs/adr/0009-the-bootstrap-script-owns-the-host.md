@@ -39,3 +39,11 @@ A node must hold the unit before `apply` can reload it. The unit holds fixed con
 A host that never ran `bootstrap` holds no unit, so `apply` fails and names this command.
 
 The script comes from `mesh.yml`. A name that the file does not hold gets no script and exit code 2.
+
+## Why the node user holds a shell
+
+The node user runs a command over SSH. `apply`, `install`, and `rotate` open a session as that user and run one command. sshd runs that command through the shell of the account and refuses it when the shell is `nologin`.
+
+The first version of this script set `/usr/sbin/nologin`, which looks safer and is not. It denies every command, so a host that the script had just prepared could not be reached at all. The empty-host run in MESHY-043 found the defect, because it runs the script and then opens the session.
+
+The script now sets `/bin/sh`. The session is not interactive, and the account holds no password. The key is the only way in, and the sudoers rule above bounds what the key may run.

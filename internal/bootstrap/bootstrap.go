@@ -69,7 +69,7 @@ if [ "$(id -u)" -ne 0 ]; then
 	exit 1
 fi
 
-for tool in systemctl useradd visudo stat install; do
+for tool in systemctl useradd usermod visudo stat install awk; do
 	if ! command -v "$tool" >/dev/null 2>&1; then
 		echo "meshy bootstrap: $tool is not on PATH, so this host cannot become a node" >&2
 		exit 1
@@ -86,7 +86,18 @@ UNIT_TMP="$UNIT_FILE.meshy-tmp"
 trap 'rm -f "$SUDOERS_TMP" "$UNIT_TMP"' EXIT
 
 if ! id -u "$USER_NAME" >/dev/null 2>&1; then
-	useradd --create-home --shell /usr/sbin/nologin "$USER_NAME"
+	# The node user runs a command over SSH, so it needs a shell that sshd will
+	# execute. A nologin shell refuses every command, and then install, apply,
+	# and rotate cannot reach a host that this script prepared. See ADR 0009.
+	useradd --create-home --shell /bin/sh "$USER_NAME"
+fi
+
+# A host that ran an older script holds a shell that refuses every command. The
+# script repairs that host, because a node that cannot be reached runs the same
+# script again.
+SHELL_NOW="$(awk -F: -v u="$USER_NAME" '$1 == u { print $7 }' /etc/passwd)"
+if [ "$SHELL_NOW" != "/bin/sh" ]; then
+	usermod --shell /bin/sh "$USER_NAME"
 fi
 
 mkdir -p "$DIR"
