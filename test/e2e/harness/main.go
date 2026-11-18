@@ -83,12 +83,12 @@ func runAssert(args []string) int {
 		return fail("assertion 4: node-a did not reload: %v", err)
 	}
 	err = wait(*reloadWait, 500*time.Millisecond, func() error {
-		return ExpectOpen("node-a", *peer+":"+*denied, 2*time.Second, dialTCP)
+		return ExpectOpen("node-b", *peer+":"+*denied, 2*time.Second, dialTCP)
 	})
 	if err != nil {
-		return fail("assertion 4: node-a did not open %s after SIGHUP: %v", *denied, err)
+		return fail("assertion 4: node-b cannot reach %s after node-a reloaded: %v", *denied, err)
 	}
-	fmt.Printf("ok 4 node-a opened %s after SIGHUP\n", *denied)
+	fmt.Printf("ok 4 node-b reaches %s after node-a reloaded\n", *denied)
 
 	fmt.Println("e2e: 4 assertions passed")
 	return 0
@@ -99,9 +99,18 @@ func runControl(args []string) int {
 	config := flags.String("config", "/etc/nebula/meshy-lab/config.yml", "config that Nebula runs")
 	allow := flags.String("allow", "/etc/nebula/meshy-lab/config-allow.yml", "config with the extra rule")
 	listen := flags.String("listen", ":9000", "address of the reload endpoint")
+	ports := flags.String("ports", "8080,9090", "ports that node-a answers on")
 	nebulaPath := flags.String("nebula", "nebula", "Nebula binary")
 	if err := flags.Parse(args); err != nil {
 		return 2
+	}
+
+	// The ports answer before the mesh is up, so a probe that reaches them over
+	// the tunnel finds a listener and not a refusal. The firewall decides which
+	// of the two a peer reaches.
+	if err := servePorts(*ports); err != nil {
+		fmt.Fprintf(os.Stderr, "harness: %v\n", err)
+		return 1
 	}
 
 	child := exec.Command(*nebulaPath, "-config", *config)
@@ -138,6 +147,32 @@ func runControl(args []string) int {
 		return 1
 	}
 	return 0
+}
+
+// servePorts accepts a connection on each port and closes it at once. A rule
+// decides whether a peer may open the port, so the listener has to exist on
+// both sides of that decision. A refusal would prove the wrong thing.
+func servePorts(ports string) error {
+	for _, port := range strings.Split(ports, ",") {
+		port = strings.TrimSpace(port)
+		if port == "" {
+			continue
+		}
+		listener, err := net.Listen("tcp", ":"+port)
+		if err != nil {
+			return fmt.Errorf("listen on :%s: %w", port, err)
+		}
+		go func(l net.Listener) {
+			for {
+				conn, err := l.Accept()
+				if err != nil {
+					return
+				}
+				conn.Close()
+			}
+		}(listener)
+	}
+	return nil
 }
 
 // installAndHup puts the config with the extra rule in place and signals the
