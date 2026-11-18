@@ -400,6 +400,14 @@ func (c *cluster) put(service, from, name string) error {
 	if err != nil {
 		return fmt.Errorf("docker %s: %v: %s", strings.Join(full, " "), err, strings.TrimSpace(string(out)))
 	}
+	// docker compose cp writes the file as root with the mode of the source.
+	// The node reads it as the node user, so the copy takes the owner of the
+	// file beside it and the mode that a private key needs.
+	fix := fmt.Sprintf("uid=$(stat -c %%u %s/config.yml) && chown \"$uid\" %s/%s && chmod 600 %s/%s",
+		dirName, dirName, name, dirName, name)
+	if out, err := c.composeRun(service, "sh", "-c", fix); err != nil {
+		return fmt.Errorf("take the owner of %s on %s: %w: %s", name, service, err, strings.TrimSpace(out))
+	}
 	return nil
 }
 
