@@ -2,10 +2,99 @@ package main
 
 import (
 	"errors"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/zinzan-vdm/cli-meshy/internal/plan"
 )
+
+// rotationReport is a plan that read one authority of the length mesh.yml
+// writes as 20y.
+func rotationReport(used float64, due bool, next string) plan.Report {
+	return plan.Report{
+		Mesh: "homelab",
+		Rotation: &plan.Rotation{
+			Authority: "ca-1",
+			NotBefore: "2026-01-01T00:00:00Z",
+			NotAfter:  "2046-01-01T00:00:00Z",
+			Used:      used,
+			RotateAt:  80,
+			Due:       due,
+			Next:      next,
+		},
+		Nodes: []plan.Node{{Name: "core-1"}},
+	}
+}
+
+func TestFormatRotationPrintsTheAgeAboveTheNodes(t *testing.T) {
+	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	end := time.Date(2046, 1, 1, 0, 0, 0, 0, time.UTC)
+	due := start.Add(time.Duration(float64(end.Sub(start)) * 0.8))
+
+	got := formatRotation(rotationReport(0.4, false, "phase 1"))
+	want := "mesh homelab\n" +
+		"  authority  ca-1 (0% of 20y)\n" +
+		"  due        no\n" +
+		"  next       phase 1 from " + due.Format("2006-01-02") + "\n\n"
+	if got != want {
+		t.Errorf("text =\n%s\nwant\n%s", got, want)
+	}
+}
+
+func TestFormatRotationPrintsTheCommandWhenTheAuthorityIsDue(t *testing.T) {
+	got := formatRotation(rotationReport(81.2, true, "phase 1"))
+	if !strings.Contains(got, "  due        yes\n") {
+		t.Errorf("text =\n%s\nwant the due line to say yes", got)
+	}
+	if !strings.Contains(got, "next       phase 1 now: meshy ca rotate --phase 1\n") {
+		t.Errorf("text =\n%s\nwant the command that starts the rotation", got)
+	}
+}
+
+func TestFormatRotationNamesThePhaseInProgress(t *testing.T) {
+	got := formatRotation(rotationReport(4, false, "phase 2"))
+	if !strings.Contains(got, "next       phase 2\n") {
+		t.Errorf("text =\n%s\nwant phase 2", got)
+	}
+}
+
+func TestFormatRotationPrintsNothingWithoutAnAuthority(t *testing.T) {
+	if got := formatRotation(plan.Report{Mesh: "homelab"}); got != "" {
+		t.Errorf("text = %q, want nothing", got)
+	}
+}
+
+func TestFormatJSONCarriesTheRotation(t *testing.T) {
+	body, err := formatJSON(rotationReport(0.4, false, "phase 1"))
+	if err != nil {
+		t.Fatalf("formatJSON: %v", err)
+	}
+	for _, want := range []string{
+		`"rotation": {`,
+		`"authority": "ca-1",`,
+		`"not_before": "2026-01-01T00:00:00Z",`,
+		`"not_after": "2046-01-01T00:00:00Z",`,
+		`"used": 0.4,`,
+		`"rotate_at": 80,`,
+		`"due": false,`,
+		`"next": "phase 1"`,
+	} {
+		if !strings.Contains(string(body), want) {
+			t.Errorf("json does not hold %q:\n%s", want, body)
+		}
+	}
+}
+
+func TestFormatJSONLeavesTheRotationOut(t *testing.T) {
+	body, err := formatJSON(plan.Report{Mesh: "homelab", Nodes: []plan.Node{}})
+	if err != nil {
+		t.Fatalf("formatJSON: %v", err)
+	}
+	if strings.Contains(string(body), "rotation") {
+		t.Errorf("json names a rotation that the plan did not read:\n%s", body)
+	}
+}
 
 func TestFormatTextPrintsOneLinePerDifference(t *testing.T) {
 	report := plan.Report{

@@ -420,3 +420,22 @@ func TestPlanJobHoldsNoShare(t *testing.T) {
 		}
 	}
 }
+
+// A due rotation is a calendar fact, so the plan warns and never blocks a
+// merge. Both jobs that plan carry the same warning.
+func TestBothPlanStepsWarnWhenTheAuthorityIsDue(t *testing.T) {
+	doc := workflowDoc(t)
+
+	for _, job := range []string{"plan", "apply"} {
+		run, _ := stepNamed(t, doc, job, "Plan")["run"].(string)
+		if !strings.Contains(run, `'"due": true'`) {
+			t.Errorf("the plan step of the %s job does not read the due field", job)
+		}
+		if !strings.Contains(run, "::warning::") {
+			t.Errorf("the plan step of the %s job does not warn about a due rotation", job)
+		}
+		if strings.Contains(run, "jq") {
+			t.Errorf("the plan step of the %s job reads the plan with jq", job)
+		}
+	}
+}

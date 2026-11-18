@@ -1,7 +1,7 @@
 ---
 # MESHY-046
 title: The plan reports when the authority is due for rotation
-status: todo
+status: completed
 type: task
 priority: normal
 tags:
@@ -9,10 +9,8 @@ tags:
     - rotation
     - reporting
 created_at: 2026-11-18T22:44:43Z
-updated_at: 2026-11-18T22:44:43Z
+updated_at: 2026-11-18T23:20:00Z
 parent: MESHY-024
-blocked_by:
-    - MESHY-035
 ---
 
 ## Overview
@@ -26,6 +24,8 @@ blocked_by:
 Without this report, a rotation depends on a calendar that nobody checks. The epic cannot close until the plan states the age.
 
 The plan runs with a closed vault on a pull request from a fork, and a fork holds no secrets. The node trust bundle is the only source that works on every path. It is also the source that matters, because a rotation concerns what the nodes trust.
+
+Phase 3 arrives in [MESHY-035](MESHY-035--the-mesh-drops-the-old-authority.md). The plan names the next phase from the trust count and the issuer of each certificate. It reads no code from that ticket, so this task has no blocker.
 
 Part of [MESHY-024](MESHY-024--the-trust-anchor-rotates.md): the trust anchor rotates without downtime.
 
@@ -113,12 +113,41 @@ The plan keeps three outcomes. A match returns 0. A difference returns 1. A plan
 
 ## Acceptance Criteria
 
-- [ ] `meshy plan` prints the three-line block above the node rows when a bundle parses.
-- [ ] `meshy plan --json` carries the `rotation` object with every field in the specification.
-- [ ] The plan omits `rotation` when no node bundle parses, and still reports the node error.
-- [ ] `used` has one decimal, and `due` is true when `used` reaches `rotate_at`.
-- [ ] A mesh with two trusted authorities reports `phase 2` while a node holds a certificate from the old authority.
-- [ ] A mesh with two trusted authorities reports `phase 3` when every node holds a certificate from the new authority.
-- [ ] A due rotation leaves the exit code at 0 when every node matches, and the JSON reports `due` true.
-- [ ] Both plan steps in the generated workflow print a warning annotation when the plan reports a due rotation.
-- [ ] `internal/scaffold/workflow_test.go` fails when `jq` appears in the generated workflow.
+- [x] `meshy plan` prints the three-line block above the node rows when a bundle parses.
+- [x] `meshy plan --json` carries the `rotation` object with every field in the specification.
+- [x] The plan omits `rotation` when no node bundle parses, and still reports the node error.
+- [x] `used` has one decimal, and `due` is true when `used` reaches `rotate_at`.
+- [x] A mesh with two trusted authorities reports `phase 2` while a node holds a certificate from the old authority.
+- [x] A mesh with two trusted authorities reports `phase 3` when every node holds a certificate from the new authority.
+- [x] A due rotation leaves the exit code at 0 when every node matches, and the JSON reports `due` true.
+- [x] Both plan steps in the generated workflow print a warning annotation when the plan reports a due rotation.
+- [x] `internal/scaffold/workflow_test.go` fails when `jq` appears in the generated workflow.
+
+## Summary of Changes
+
+- `internal/node/state.go`: `Cert` holds `NotBefore`, parsed from `details.notBefore`.
+- `internal/plan/plan.go`: `Rotation` struct, `Report.Rotation`, and `authorityAge`, `bundleCert`, `readThreshold`, `nextPhase`, `signedBy`, `Lifetime`, `Life`, `PhaseDate`.
+- `cmd/meshy/plan.go`: `formatRotation` and `nextLine` print the block above the node rows.
+- `internal/scaffold/scaffold.go`: both plan steps warn when the plan reports a due rotation.
+- `internal/plan/rotation_test.go`: the age, the threshold at 79.9 and 80.0 percent, phase 2, phase 3, and a bundle with no dates.
+- `cmd/meshy/plan_test.go`, `cmd/meshy/plan_ssh_test.go`: the block, the due line, the phase line, the JSON object, and one run of `cmdPlan` against a test server.
+- `internal/node/state_test.go`: the reader keeps `notBefore`.
+- `internal/scaffold/workflow_test.go`: both plan steps warn, and neither reads the plan with `jq`.
+- `docs/adr/0014-a-due-rotation-is-information-not-drift.md`, `docs/patterns/0023-the-plan-reads-the-authority-from-the-bundle.md`.
+
+## Verification
+
+Local gates on Go 1.27.4. The host has no container runtime, so no live node was read. Every claim below comes from a command that ran.
+
+- `gofmt -l .` prints nothing.
+- `go build ./...` prints `BUILD_OK`.
+- `go vet ./...` prints `VET_OK`.
+- `go test ./...` passes 24 packages, 0 `--- FAIL`.
+- `beans check` prints `All checks passed`.
+- `write-tism audit.py` prints `total: 0`.
+
+The block prints from a real command. `TestPlanPrintsTheAgeOfTheAuthority` runs `cmdPlan` against a test SSH server that presents a bundle with `notBefore` and `notAfter`. The output starts with `mesh homelab` and the `authority`, `due` and `next` lines, then holds `core-1  ok`. The exit code is 0.
+
+The warning was proved two ways. `TestBothPlanStepsWarnWhenTheAuthorityIsDue` asserts that both plan steps hold `grep -q '"due": true'` and a `::warning` echo. The same two lines were then run in bash against three documents: `due: true` printed the annotation, and `due: false` and no rotation printed nothing. The guard bites: `jq -e '.rotation.due'` was injected into both steps and the test failed on both jobs. The injection was reverted.
+
+Not proved here: the annotation on a GitHub runner. The generated workflow is asserted as text, and the step that holds it is not executed by this branch.

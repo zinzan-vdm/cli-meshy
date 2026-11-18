@@ -106,6 +106,10 @@ func TestParseCertReadsTheArrayTheToolPrints(t *testing.T) {
 	if c.Name != "core-1" || c.Fingerprint != "aa11bb22" || c.NotAfter != "2027-11-17T22:47:57Z" {
 		t.Errorf("unexpected cert: %+v", c)
 	}
+	// The plan needs the start of the life to report the age of an authority.
+	if c.NotBefore != "2026-11-17T22:47:57Z" {
+		t.Errorf("notBefore = %q", c.NotBefore)
+	}
 	if len(c.Groups) != 1 || c.Groups[0] != "core" {
 		t.Errorf("groups = %v", c.Groups)
 	}
