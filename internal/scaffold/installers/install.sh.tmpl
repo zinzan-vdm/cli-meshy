@@ -1,0 +1,91 @@
+#!/bin/sh
+# meshy installer for node {{.Node}} in mesh {{.Mesh}}.
+# It writes to /etc and starts a systemd unit, so it needs root.
+# MESHY_ROOT moves every path under a prefix. A test uses it.
+set -eu
+
+ROOT=${MESHY_ROOT-}
+DIR="$ROOT{{.Dir}}"
+BINARY="$ROOT{{.BinaryPath}}"
+UNIT="{{.Unit}}"
+UNIT_FILE="$ROOT{{.UnitFile}}"
+HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+
+if [ "$(id -u)" -ne 0 ]; then
+	echo "meshy install: run this installer as root, because it writes to $ROOT/etc and starts $UNIT" >&2
+	exit 1
+fi
+
+mkdir -p "$DIR" "$(dirname -- "$BINARY")" "$(dirname -- "$UNIT_FILE")"
+
+if [ -f "$HERE/{{.Binary}}" ]; then
+	install -m 0755 "$HERE/{{.Binary}}" "$BINARY"
+else
+	if ! command -v curl >/dev/null 2>&1; then
+		echo "meshy install: this archive holds no binary and curl is not on PATH" >&2
+		exit 1
+	fi
+	TMP=$(mktemp -d)
+	trap 'rm -rf "$TMP"' EXIT
+
+	curl -fsSL "{{.BaseURL}}/{{.Version}}/{{.Checksum}}" -o "$TMP/{{.Checksum}}"
+	curl -fsSL "{{.BaseURL}}/{{.Version}}/{{.Asset}}" -o "$TMP/{{.Asset}}"
+
+	want=$(awk -v a="{{.Asset}}" '$2 == a || $2 == "*" a { print $1 }' "$TMP/{{.Checksum}}")
+	if [ -z "$want" ]; then
+		echo "meshy install: {{.Checksum}} holds no line for {{.Asset}}" >&2
+		exit 1
+	fi
+	got=$(sha256sum "$TMP/{{.Asset}}" | awk '{ print $1 }')
+	if [ "$got" != "$want" ]; then
+		echo "meshy install: {{.Asset}} does not match its checksum" >&2
+		exit 1
+	fi
+
+	tar -xzf "$TMP/{{.Asset}}" -C "$TMP" {{.Binary}}
+	install -m 0755 "$TMP/{{.Binary}}" "$BINARY"
+fi
+
+# The blocklist comes first, because the config names it.
+install -m 0644 "$HERE/blocklist.txt" "$DIR/blocklist.txt"
+install -m 0600 "$HERE/config.yml" "$DIR/config.yml"
+install -m 0644 "$HERE/ca.crt" "$DIR/ca.crt"
+install -m 0644 "$HERE/{{.Node}}.crt" "$DIR/{{.Node}}.crt"
+install -m 0600 "$HERE/{{.Node}}.key" "$DIR/{{.Node}}.key"
+
+cat > "$UNIT_FILE" <<MESHY_UNIT
+[Unit]
+Description=Nebula for mesh {{.Mesh}}
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=$BINARY -config $DIR/config.yml
+ExecReload=/bin/kill -HUP \$MAINPID
+Restart=on-failure
+RestartSec=5s
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
+MESHY_UNIT
+chmod 0644 "$UNIT_FILE"
+
+systemctl daemon-reload
+systemctl enable --now "$UNIT"
+
+# The unit is up when the interface is. Ten seconds is enough for a TUN device.
+tries=0
+until ip link show "{{.Interface}}" >/dev/null 2>&1; do
+	tries=$((tries + 1))
+	if [ "$tries" -ge 10 ]; then
+		echo "meshy install: $UNIT started, but the interface {{.Interface}} is not up. Run: journalctl -u $UNIT" >&2
+		exit 1
+	fi
+	sleep 1
+done
+
+echo "meshy-{{.Mesh}} is running"

@@ -117,6 +117,22 @@ func Local(srcDir, version, goos, goarch, dir string) (string, error) {
 	return place(archive, sums, asset, dir)
 }
 
+// Cached reports the binary that a fetch kept in dir, when it still matches the
+// digest in the checksum file that the fetch wrote beside it. It reads two
+// files and makes no network call, so a caller that needs the bytes that meshy
+// install already verified does not download them again.
+func Cached(dir, goos, goarch string) (string, bool) {
+	body, err := os.ReadFile(filepath.Join(dir, ChecksumFile))
+	if err != nil {
+		return "", false
+	}
+	sums, err := Checksums(bytes.NewReader(body))
+	if err != nil {
+		return "", false
+	}
+	return cached(dir, Asset(goos, goarch), sums)
+}
+
 // fetchChecksums keeps the published checksums beside the binary, so a later
 // run can tell whether the cache still matches without a download.
 func fetchChecksums(ctx context.Context, c *http.Client, version, dir string) (map[string]string, error) {

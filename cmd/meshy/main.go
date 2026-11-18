@@ -39,6 +39,8 @@ func run(args []string) int {
 		return cmdBootstrap(args[1:])
 	case "install":
 		return cmdInstall(args[1:])
+	case "bundle":
+		return cmdBundle(args[1:])
 	case "unlock":
 		return cmdUnlock(args[1:])
 	case "lock":
@@ -71,6 +73,7 @@ Commands:
   issue      mint a certificate for a node
   bootstrap  print the script that prepares a server node
   install    put the pinned Nebula release on the server nodes
+  bundle     write the one archive that a user node joins with
   unlock     open the vault and write its plaintext to .meshy
   lock       remove the plaintext of the vault
   version    print the build version
@@ -79,7 +82,7 @@ Flags:
   --mesh <dir>   directory that holds mesh.yml (default ".")
 
 Planned:
-  bundle, status, ca rotate
+  status, ca rotate
 `)
 }
 

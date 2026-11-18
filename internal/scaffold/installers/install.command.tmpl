@@ -1,0 +1,94 @@
+#!/bin/sh
+# meshy installer for node {{.Node}} in mesh {{.Mesh}}.
+# It writes to /etc and loads a launchd daemon, so it needs root.
+set -eu
+
+DIR="{{.Dir}}"
+BINARY="{{.BinaryPath}}"
+PLIST="{{.Plist}}"
+LABEL="com.meshy.{{.Mesh}}"
+HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+
+if [ "$(id -u)" -ne 0 ]; then
+	echo "meshy install: run this installer as root, because it writes to /etc and loads $PLIST" >&2
+	echo "meshy install: sudo \"$0\"" >&2
+	exit 1
+fi
+
+# A file that arrived in a download and a mail client carries the quarantine
+# flag. macOS refuses to run it until the flag is gone.
+xattr -dr com.apple.quarantine "$HERE" 2>/dev/null || true
+
+mkdir -p "$DIR" "$(dirname -- "$BINARY")"
+
+if [ -f "$HERE/{{.Binary}}" ]; then
+	install -m 0755 "$HERE/{{.Binary}}" "$BINARY"
+else
+	if ! command -v curl >/dev/null 2>&1; then
+		echo "meshy install: this archive holds no binary and curl is not on PATH" >&2
+		exit 1
+	fi
+	TMP=$(mktemp -d)
+	trap 'rm -rf "$TMP"' EXIT
+
+	curl -fsSL "{{.BaseURL}}/{{.Version}}/{{.Checksum}}" -o "$TMP/{{.Checksum}}"
+	curl -fsSL "{{.BaseURL}}/{{.Version}}/{{.Asset}}" -o "$TMP/{{.Asset}}"
+
+	want=$(awk -v a="{{.Asset}}" '$2 == a || $2 == "*" a { print $1 }' "$TMP/{{.Checksum}}")
+	if [ -z "$want" ]; then
+		echo "meshy install: {{.Checksum}} holds no line for {{.Asset}}" >&2
+		exit 1
+	fi
+	got=$(shasum -a 256 "$TMP/{{.Asset}}" | awk '{ print $1 }')
+	if [ "$got" != "$want" ]; then
+		echo "meshy install: {{.Asset}} does not match its checksum" >&2
+		exit 1
+	fi
+
+	tar -xzf "$TMP/{{.Asset}}" -C "$TMP" {{.Binary}}
+	install -m 0755 "$TMP/{{.Binary}}" "$BINARY"
+fi
+
+install -m 0644 "$HERE/blocklist.txt" "$DIR/blocklist.txt"
+install -m 0600 "$HERE/config.yml" "$DIR/config.yml"
+install -m 0644 "$HERE/ca.crt" "$DIR/ca.crt"
+install -m 0644 "$HERE/{{.Node}}.crt" "$DIR/{{.Node}}.crt"
+install -m 0600 "$HERE/{{.Node}}.key" "$DIR/{{.Node}}.key"
+
+cat > "$PLIST" <<'MESHY_PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.meshy.{{.Mesh}}</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>{{.BinaryPath}}</string>
+		<string>-config</string>
+		<string>{{.ConfigPath}}</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<true/>
+</dict>
+</plist>
+MESHY_PLIST
+chown root:wheel "$PLIST"
+chmod 0644 "$PLIST"
+
+launchctl unload -w "$PLIST" 2>/dev/null || true
+launchctl load -w "$PLIST"
+
+tries=0
+until ifconfig "{{.Interface}}" >/dev/null 2>&1; do
+	tries=$((tries + 1))
+	if [ "$tries" -ge 10 ]; then
+		echo "meshy install: $LABEL is loaded, but the interface {{.Interface}} is not up. Run: log show --predicate 'process == \"nebula\"'" >&2
+		exit 1
+	fi
+	sleep 1
+done
+
+echo "meshy-{{.Mesh}} is running"

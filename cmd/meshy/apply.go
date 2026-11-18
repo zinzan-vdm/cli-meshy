@@ -11,9 +11,7 @@ import (
 	"time"
 
 	"github.com/zinzan-vdm/cli-meshy/internal/apply"
-	"github.com/zinzan-vdm/cli-meshy/internal/ca"
 	"github.com/zinzan-vdm/cli-meshy/internal/config"
-	"github.com/zinzan-vdm/cli-meshy/internal/issue"
 	"github.com/zinzan-vdm/cli-meshy/internal/nebula"
 	"github.com/zinzan-vdm/cli-meshy/internal/revoke"
 	"github.com/zinzan-vdm/cli-meshy/internal/sshx"
@@ -24,15 +22,10 @@ import (
 // vault, the tool that signs, and the certificates that the mesh no longer
 // names.
 type applyRun struct {
-	mesh    *config.Mesh
-	meshDir string
+	*certifier
 	dir     string
-	record  vault.Record
-	binary  string
-	now     time.Time
 	block   []byte
 	revoked []revoke.Node
-	changed bool
 }
 
 func cmdApply(args []string) int {
@@ -121,21 +114,11 @@ func newApplyRun(mesh config.Mesh, meshDir string) (*applyRun, int) {
 		return nil, 2
 	}
 
-	run := &applyRun{mesh: &mesh, meshDir: meshDir, dir: dir, record: record, now: time.Now()}
+	run := &applyRun{
+		certifier: &certifier{mesh: &mesh, meshDir: meshDir, record: record, now: time.Now()},
+		dir:       dir,
+	}
 	return run, 0
-}
-
-// tool returns the pinned nebula-cert. A run that issues or revokes needs it.
-func (r *applyRun) tool() (string, error) {
-	if r.binary != "" {
-		return r.binary, nil
-	}
-	binary, err := ca.Find(r.meshDir, r.mesh.Nebula.Version)
-	if err != nil {
-		return "", err
-	}
-	r.binary = binary
-	return binary, nil
 }
 
 // run makes every target hold the mesh, blocks a certificate that the mesh no
@@ -232,65 +215,6 @@ func (r *applyRun) node(ctx context.Context, target config.Node, knownHosts stri
 		report.Error = reason(target, err)
 	}
 	return report
-}
-
-// certificate returns the certificate and the key that the node must hold. It
-// signs a new certificate when the vault holds none or when the one it holds is
-// inside the renewal window, and it keeps the address and the groups, so the
-// node needs a reload and not a restart.
-func (r *applyRun) certificate(ctx context.Context, target config.Node) (cert, key []byte, renewed bool, err error) {
-	binary, err := r.tool()
-	if err != nil {
-		return nil, nil, false, err
-	}
-
-	if current, currentKey, ok := vault.Certificate(r.record, target.Name); ok && !due(ctx, binary, current, *r.mesh, r.now) {
-		return current, currentKey, false, nil
-	}
-
-	networks, err := meshNetworks(*r.mesh, target)
-	if err != nil {
-		return nil, nil, false, err
-	}
-	signed, err := issue.Sign(ctx, issue.Options{
-		Binary:    binary,
-		Authority: r.authority(),
-		Request: issue.Request{
-			Name:     target.Name,
-			Networks: networks,
-			Groups:   target.Groups,
-			Lifetime: lifetime(*r.mesh, target),
-		},
-	})
-	if err != nil {
-		return nil, nil, false, err
-	}
-
-	vault.SetCertificate(r.record, target.Name, signed.Cert, signed.Key)
-	r.changed = true
-	return signed.Cert, signed.Key, true, nil
-}
-
-// authority returns the key pair that signs. The vault must hold it, because a
-// run that renews a certificate needs the authority key.
-func (r *applyRun) authority() issue.Authority {
-	cert, key, _ := vault.Certificate(r.record, r.mesh.CA.Active)
-	return issue.Authority{Cert: cert, Key: key}
-}
-
-// due reports whether the certificate that the vault holds needs to be replaced.
-// The vault copy is the certificate that the run writes, so its remaining life
-// decides the renewal.
-func due(ctx context.Context, binary string, cert []byte, mesh config.Mesh, now time.Time) bool {
-	printed, err := issue.Print(ctx, binary, cert)
-	if err != nil {
-		return true
-	}
-	notAfter, err := issue.Expiry(printed)
-	if err != nil {
-		return true
-	}
-	return issue.Due(notAfter, mesh.Certificates.RenewBefore.Duration, now, false)
 }
 
 // files reads the material that the node must hold.
