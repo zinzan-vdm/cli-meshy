@@ -66,7 +66,7 @@ Commands:
   init       create a mesh repository in a directory
   validate   check a mesh file and report every problem
   plan       compare a mesh file with the nodes and report every difference
-  apply      write the config and the certificate to one node
+  apply      make every node match mesh.yml
   ca         create the certificate authority of the mesh
   issue      mint a certificate for a node
   bootstrap  print the script that prepares a server node

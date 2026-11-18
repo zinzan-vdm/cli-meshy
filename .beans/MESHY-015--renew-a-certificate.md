@@ -1,14 +1,14 @@
 ---
 # MESHY-015
 title: Renew a certificate inside the window
-status: todo
+status: completed
 type: task
 priority: normal
 tags:
     - certificates
     - apply
 created_at: 2026-11-17T19:22:37Z
-updated_at: 2026-11-17T20:54:22Z
+updated_at: 2026-11-18T09:30:00Z
 parent: MESHY-013
 ---
 ## Overview
@@ -46,9 +46,28 @@ Renewal uses the authority named by `ca.active`. A user node is never renewed re
 
 ## Acceptance Criteria
 
-- [ ] A certificate inside the window is replaced and the node reloads.
-- [ ] A certificate outside the window is left alone.
-- [ ] The renewed certificate keeps the address and the groups.
-- [ ] A user node is never renewed over SSH.
-- [ ] A rule change and a renewal in one run cause one reload.
-- [ ] The plan reports the same renewal before it happens.
+- [x] A certificate inside the window is replaced and the node reloads.
+- [x] A certificate outside the window is left alone.
+- [x] The renewed certificate keeps the address and the groups.
+- [x] A user node is never renewed over SSH.
+- [x] A rule change and a renewal in one run cause one reload.
+- [x] The plan reports the same renewal before it happens.
+
+## Summary of Changes
+
+| File | Change |
+|---|---|
+| `cmd/meshy/apply.go` | `applyRun.certificate` signs a certificate when the vault holds none, or when the one it holds is inside `certificates.renew_before`. `due` reads the remaining life with the pinned tool. |
+| `cmd/meshy/issue.go` | `meshNetworks` and `lifetime` are shared with `meshy issue`, so the two cannot drift. |
+| `internal/apply/apply.go` | `Files` carries the blocklist. `Unit` is exported for a caller that checks the unit before it signs. |
+| `internal/revoke` | The package that finds the certificates the mesh no longer names. |
+| `docs/patterns/0016` | A renewal signs again from the mesh file. |
+| `README.md` | The apply section names the renewal and the exit contract. |
+
+## Deviations
+
+The run reads the remaining life from the certificate in the vault, not from the certificate on the node. The vault copy is the certificate the run writes. A node that holds no file, or an older one, receives the vault copy through the write path. The first row of the table is the same code, and the run saves a read of every node.
+
+## Verification
+
+`TestApplyRenewsACertificateInsideTheWindow`, `TestApplyLeavesACertificateOutsideTheWindow`, and `TestApplyRenewsAndRevokesWithTheRealTool` cover the three cases. The last one runs only when `MESHY_NEBULA_CERT` names a binary, and it signed a certificate of one hour with the real tool.
