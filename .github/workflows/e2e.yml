@@ -62,7 +62,10 @@ jobs:
         run: |
           mkdir -p test/e2e/.build
           install -m 0755 "$RUNNER_TEMP/nebula" test/e2e/.build/nebula
-          go build -o test/e2e/.build/harness ./test/e2e/harness
+          # The image is Alpine, so the harness must be static. Without this the
+          # binary is linked against the runner's glibc and the container cannot
+          # exec it, which reads as "no such file or directory".
+          CGO_ENABLED=0 go build -o test/e2e/.build/harness ./test/e2e/harness
           docker build -t meshy-e2e:local test/e2e
       - name: Render the configs
         run: go run ./test/e2e/generate -mesh test/e2e -binary "$RUNNER_TEMP/nebula-cert" -out test/e2e/generated
