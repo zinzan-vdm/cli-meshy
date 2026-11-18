@@ -1,14 +1,14 @@
 ---
 # MESHY-034
 title: Every node holds a new certificate
-status: in-progress
+status: completed
 type: task
 priority: high
 tags:
     - certificates
     - rotation
 created_at: 2026-11-17T20:41:41Z
-updated_at: 2026-11-18T19:05:00Z
+updated_at: 2026-11-18T20:25:00Z
 parent: MESHY-024
 blocked_by:
     - MESHY-025
@@ -62,10 +62,36 @@ meshy ca rotate --phase 2 [--mesh <dir>]
 ## Acceptance Criteria
 
 - [x] Phase 2 issues a certificate for every node from the active authority.
-- [ ] Each node receives its certificate and reloads with no dropped tunnel.
+- [x] Each node receives its certificate and reloads with no dropped tunnel.
 - [x] The old certificate stays valid until phase 3.
 - [x] Phase 2 refuses to run while `ca.trust` holds one authority.
 - [x] A node that fails its handshake stops the phase and is named in the report.
+
+## Verification
+
+The job ran and passed on a GitHub-hosted runner: `.github/workflows/rotate.yml`, run `44389072631`, 34 seconds. It printed one line for each assertion:
+
+```
+ok 1: the vault is sealed and unlocked with shares from this run
+ok 2: both nodes hold a certificate and the tunnel carries a ping to 10.42.0.1
+ok 3: node-a signs with 9b7a35d5 and node-b signs with 9b7a35d5 before the rotation
+ok 4: phase 1 gives both nodes the trust bundle of ca-1 and ca-2
+ok 5: phase 2 replaces the certificate of node-a (97916997 -> 07307721) and of node-b (914d05b7 -> 15862133)
+ok 6: the tunnel lost 0 of 11 replies while phase 2 reloaded both nodes
+ok 7: every node signs with ca-2 (9459fea2)
+rotate: 7 assertions passed
+```
+
+The first assertion holds the whole reason for the scenario. A reload that keeps the process alive proves nothing, because the old certificate would also keep the tunnel up. Assertion 5 reads both fingerprints back, and assertion 6 shows that eleven replies crossed the tunnel while the certificates changed.
+
+The job needed several runs to pass. Each failure was a real difference between a container and a host, and none of them was visible here.
+
+| Failure | Cause |
+|---|---|
+| the harness could not be executed | it was built against the glibc of the runner |
+| the host key did not match | the file held one key type and the client asked for another |
+| the unit answered inactive | the shim read a root process with `kill -0` as the node user |
+| the first write failed | the config directory that `bootstrap` creates was absent |
 
 ## Summary of Changes
 
