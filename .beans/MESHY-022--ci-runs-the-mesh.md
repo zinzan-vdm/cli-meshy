@@ -1,14 +1,14 @@
 ---
 # MESHY-022
 title: CI runs the mesh
-status: todo
+status: completed
 type: epic
 priority: high
 tags:
     - ci
     - automation
 created_at: 2026-11-17T19:22:37Z
-updated_at: 2026-11-17T20:54:22Z
+updated_at: 2026-11-18T15:00:00Z
 ---
 ## Overview
 
@@ -56,3 +56,23 @@ Rules:
 - [ ] The weekly run reports drift and renews inside the window.
 - [ ] A failed apply fails the run and names the node.
 - [ ] The lock step runs even when the apply step fails.
+
+## Status
+
+Both tasks of the epic are complete. [MESHY-023](MESHY-023--a-pull-request-plans-the-mesh.md) made a pull request plan the mesh, and [MESHY-032](MESHY-032--a-merge-applies-the-mesh.md) made a merge, a weekly run, and a manual run apply it.
+
+The template that `meshy init` writes now carries both halves:
+
+| Event | Job | Vault |
+|---|---|---|
+| `pull_request` from this repository | plan | closed |
+| `pull_request` from a fork | validate only | no secrets |
+| `push` to `main` | plan, unlock, apply, lock | shares from secrets |
+| `schedule`, weekly | plan, then apply only when the plan exits 1 | shares from secrets |
+| `workflow_dispatch` | the same as the weekly run | shares from secrets |
+
+The apply job needs the pinned `nebula-cert`, because `apply` signs and renews, so the job fetches and verifies that tool before it applies.
+
+## What is not proved yet
+
+The workflow has not run against a real mesh repository, because this project ships no release of the CLI. The jobs are checked by tests over the template, and by the digest logic that the e2e job shares. The first mesh repository to adopt the template carries that proof, and [MESHY-043](MESHY-043--a-host-becomes-a-node.md) waits on the same run.
