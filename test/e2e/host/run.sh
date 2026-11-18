@@ -151,7 +151,6 @@ printf 'note: the vault is sealed and holds no share in the environment\n'
 # The mesh names the node, and the compose file names the host that serves it.
 # They differ, so every call passes both.
 bootstrap_node "$NODE" "$HOST"
-printf 'note: the home of the node user is %s\n' "$(on "root@$HOST" 'ls -ld /home/meshy' 2>/dev/null || true)"
 
 uid=$(on "root@$HOST" 'id -u meshy')
 case "$uid" in

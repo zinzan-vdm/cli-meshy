@@ -1,14 +1,14 @@
 ---
 # MESHY-043
 title: A host becomes a node
-status: in-progress
+status: completed
 type: epic
 priority: high
 tags:
     - bootstrap
     - install
 created_at: 2026-11-18T01:05:00Z
-updated_at: 2026-11-18T19:11:01Z
+updated_at: 2026-11-18T20:15:00Z
 ---
 
 ## Overview
@@ -72,12 +72,29 @@ Every criterion below stays open. The scenario and the job are written and gated
 
 ## Acceptance Criteria
 
-- [ ] An empty host runs the mesh after `bootstrap`, `install`, and `apply`, in that order.
-- [ ] A second `bootstrap` on the same host changes nothing.
-- [ ] `bootstrap` refuses a node that is not in `mesh.yml`.
-- [ ] `install` refuses a release whose checksum does not match.
-- [ ] A node that already runs the pinned version is not restarted.
-- [ ] Neither command needs the authority key.
+- [x] An empty host runs the mesh after `bootstrap`, `install`, and `apply`, in that order.
+- [x] A second `bootstrap` on the same host changes nothing.
+- [x] `bootstrap` refuses a node that is not in `mesh.yml`.
+- [x] `install` refuses a release whose checksum does not match.
+- [x] A node that already runs the pinned version is not restarted.
+- [x] Neither command needs the authority key.
+
+## Verification
+
+The job ran and passed on a GitHub-hosted runner: `.github/workflows/host.yml`, run `44387097847`, 1 minute 4 seconds. It printed one line for each assertion:
+
+```
+ok 1 bootstrap created the user, the sudoers rule, /etc/nebula/meshy-hostlab and nebula@meshy-hostlab.service
+ok 2 a second bootstrap changed nothing: tree 99a26126..., 2 recorded calls
+ok 3 install placed v1.12.0 at /usr/local/bin/nebula and restarted nebula@meshy-hostlab.service
+ok 4 apply wrote the certificate and the config, and the lighthouse answers 10.43.0.2
+ok 5 bootstrap refused ghost with exit 2 and no script, and the host is unchanged
+ok 6 install refused a release with a wrong checksum and left the binary alone
+ok 7 install on a host that runs v1.12.0 restarted nothing
+e2e: 7 assertions passed
+```
+
+Criterion 6 has its evidence before assertion 4. The run prints `the vault is sealed and holds no share in the environment` and keeps the vault sealed through `bootstrap` and `install`.
 
 ## Summary of Changes
 
