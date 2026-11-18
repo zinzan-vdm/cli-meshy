@@ -37,6 +37,10 @@ is-active)
     exit 0
   fi
   echo inactive
+  # A unit that is not active explains itself, so the run log carries the reason.
+  if [ -f "$logfile" ]; then
+    tail -n 5 "$logfile" >&2
+  fi
   exit 3
   ;;
 reload)
