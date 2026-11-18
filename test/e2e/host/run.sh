@@ -104,8 +104,9 @@ bootstrap_node() {
 		printf 'note: the account of the node user is %s\n' "$(on "root@$host" 'grep "^meshy:" /etc/passwd' || true)"
 		on "root@$host" 'ls -ld /home/meshy /home/meshy/.ssh /home/meshy/.ssh/authorized_keys' || true
 		printf 'note: the key the host holds is %s\n' "$(on "root@$host" 'ssh-keygen -lf /home/meshy/.ssh/authorized_keys' 2>&1 || true)"
-		printf 'note: the key the runner holds is %s\n' "$(ssh-keygen -lf "$KEY.pub" 2>&1 || true)"
-		on "root@$host" 'tail -n 20 /var/log/auth.log 2>/dev/null || true' || true
+		printf 'note: the key the runner holds is %s\n' "$(ssh-keygen -lf "$KEY" 2>&1 || true)"
+		printf 'note: the daemon holds %s\n' "$(on "root@$host" 'sshd -T -C user=meshy 2>&1 | grep -E "^authorizedkeysfile|^allowusers|^strictmodes|^pubkeyauthentication|^permitrootlogin"' 2>&1 || true)"
+		printf 'note: the client says %s\n' "$(ssh -vv -i "$KEY" -o "UserKnownHostsFile=$KNOWN" -o StrictHostKeyChecking=yes -o BatchMode=yes "meshy@$host" true 2>&1 | grep -E "Offering|Server accepts|Authentications that can continue|Permission denied" | head -4 || true)"
 		fail "the node user cannot run a command on $host"
 	fi
 }
