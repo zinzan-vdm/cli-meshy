@@ -115,6 +115,15 @@ jobs:
             -key "$RUNNER_TEMP/meshy_key" \
             -known-hosts "$RUNNER_TEMP/known_hosts" \
             -nebula-cert "$RUNNER_TEMP/nebula-cert"
+      # A node that exits says why in its own log, and the job is the only place
+      # that can read it after the run has failed.
+      - name: Dump the node logs
+        if: failure()
+        run: |
+          for service in node-a node-b; do
+            echo "--- $service"
+            docker compose -f test/e2e/rotate/compose.yml exec -T "$service" sh -c 'tail -n 40 /var/log/nebula-meshy-rot.log 2>/dev/null || echo "no log"' || true
+          done
       - name: Tear down
         if: always()
         run: docker compose -f test/e2e/rotate/compose.yml down -v
