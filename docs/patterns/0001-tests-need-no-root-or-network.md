@@ -21,3 +21,5 @@ Bad: a test starts three Nebula processes and pings across the overlay. That bel
 ## Enforcement
 
 `go test ./...` in the `ci` job runs with no elevated rights. A test that needs them fails there, which is the signal.
+
+A test that needs a node uses `internal/sshx/sshtest`. The harness serves SSH over a pipe and opens no port.
