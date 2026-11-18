@@ -14,13 +14,15 @@ import (
 
 func cmdCA(args []string) int {
 	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, "meshy ca: name a subcommand: init")
+		fmt.Fprintln(os.Stderr, "meshy ca: name a subcommand: init, rotate")
 		return 2
 	}
 
 	switch args[0] {
 	case "init":
 		return cmdCAInit(args[1:])
+	case "rotate":
+		return cmdCARotate(args[1:])
 	default:
 		fmt.Fprintf(os.Stderr, "meshy ca: unknown subcommand %q\n", args[0])
 		return 2

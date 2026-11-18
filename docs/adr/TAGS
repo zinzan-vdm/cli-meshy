@@ -10,8 +10,10 @@ nebula
 plan
 repository
 review
+rotation
 signing
 state
 systemd
 transport
+trust
 vault

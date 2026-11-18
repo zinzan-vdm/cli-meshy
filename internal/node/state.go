@@ -9,13 +9,13 @@ import (
 
 // State is what a node actually runs. It is read, never written.
 type State struct {
-	Name       string
-	Version    string
-	Service    string
-	Interface  bool
-	ConfigHash string
-	Cert       Cert
-	Authority  Cert
+	Name        string
+	Version     string
+	Service     string
+	Interface   bool
+	ConfigHash  string
+	Cert        Cert
+	Authorities []Cert
 }
 
 // Cert is the part of a certificate that the plan compares.
@@ -58,21 +58,46 @@ func ParseHash(out string) (string, error) {
 	return strings.ToLower(f[0]), nil
 }
 
-// ParseCert reads the certificate details from `nebula-cert print -json`.
+// ParseCert reads the certificate details from `nebula-cert print -json`. A
+// certificate file holds one document, and a trust bundle holds several, so this
+// function returns the first document and ParseCerts returns all of them.
 func ParseCert(out string) (Cert, error) {
+	certs, err := ParseCerts(out)
+	if err != nil {
+		return Cert{}, err
+	}
+	return certs[0], nil
+}
+
+// ParseCerts reads every certificate that `nebula-cert print -json` prints. The
+// tool prints an array, and the array holds one entry for each PEM block in the
+// file, so ca.crt with two authorities prints two.
+func ParseCerts(out string) ([]Cert, error) {
 	var list []certDoc
 	if err := json.Unmarshal([]byte(out), &list); err == nil {
 		if len(list) == 0 {
-			return Cert{}, fmt.Errorf("certificate has no fingerprint")
+			return nil, fmt.Errorf("certificate has no fingerprint")
 		}
-		return list[0].cert()
+		return docs(list)
 	}
 
 	var doc certDoc
 	if err := json.Unmarshal([]byte(out), &doc); err != nil {
-		return Cert{}, fmt.Errorf("certificate is not readable: %w", err)
+		return nil, fmt.Errorf("certificate is not readable: %w", err)
 	}
-	return doc.cert()
+	return docs([]certDoc{doc})
+}
+
+func docs(list []certDoc) ([]Cert, error) {
+	certs := make([]Cert, 0, len(list))
+	for _, doc := range list {
+		cert, err := doc.cert()
+		if err != nil {
+			return nil, err
+		}
+		certs = append(certs, cert)
+	}
+	return certs, nil
 }
 
 // certDoc is one entry of the array that nebula-cert prints. The tool prints an

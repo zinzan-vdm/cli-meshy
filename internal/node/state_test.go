@@ -112,3 +112,30 @@ func TestParseCertRejectsAnEmptyArray(t *testing.T) {
 		t.Error("ParseCert accepted an empty array")
 	}
 }
+
+// nebula-cert v1.12.0 prints one document for each PEM block in the file, so a
+// trust bundle with two authorities prints an array of two. This text is the
+// output of the pinned tool on a bundle of ca-1 and ca-2.
+const bundleJSON = `[{"curve":"CURVE25519","details":{"groups":null,"isCa":true,"issuer":"","name":"ca-1","networks":["10.42.0.0/24"],"notAfter":"2046-11-13T14:37:52Z","notBefore":"2026-11-18T14:37:52Z"},"fingerprint":"cded78a3"},{"curve":"CURVE25519","details":{"groups":null,"isCa":true,"issuer":"","name":"ca-2","networks":["10.42.0.0/24"],"notAfter":"2046-11-13T14:37:52Z","notBefore":"2026-11-18T14:37:52Z"},"fingerprint":"cf7ac451"}]`
+
+func TestParseCertsReadsEveryDocumentOfABundle(t *testing.T) {
+	certs, err := ParseCerts(bundleJSON)
+	if err != nil {
+		t.Fatalf("ParseCerts: %v", err)
+	}
+	if len(certs) != 2 {
+		t.Fatalf("ParseCerts returned %d certificates, want 2", len(certs))
+	}
+	if certs[0].Name != "ca-1" || certs[1].Name != "ca-2" {
+		t.Errorf("names = %q %q", certs[0].Name, certs[1].Name)
+	}
+	if !certs[0].IsCA || !certs[1].IsCA {
+		t.Errorf("a bundle entry is not marked as an authority: %+v", certs)
+	}
+}
+
+func TestParseCertsRejectsAnEmptyArray(t *testing.T) {
+	if _, err := ParseCerts("[]"); err == nil {
+		t.Error("ParseCerts accepted an empty array")
+	}
+}

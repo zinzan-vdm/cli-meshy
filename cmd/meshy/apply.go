@@ -217,11 +217,12 @@ func (r *applyRun) node(ctx context.Context, target config.Node, knownHosts stri
 	return report
 }
 
-// files reads the material that the node must hold.
+// files reads the material that the node must hold. The authority file is the
+// trust bundle, so a node accepts every authority that mesh.yml trusts.
 func (r *applyRun) files(target config.Node, cert, key []byte) (apply.Files, error) {
-	authority, _, found := vault.Certificate(r.record, r.mesh.CA.Active)
-	if !found {
-		return apply.Files{}, fmt.Errorf("the vault holds no certificate for authority %s", r.mesh.CA.Active)
+	authority, err := vault.TrustBundle(r.record, r.mesh.CA.Trust)
+	if err != nil {
+		return apply.Files{}, err
 	}
 
 	rendered, err := nebula.Render(*r.mesh, target)

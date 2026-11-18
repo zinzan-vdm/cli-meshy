@@ -92,10 +92,13 @@ func openApplyVault(t *testing.T, meshDir string, names ...string) {
 }
 
 // fakeNode is one node with a filesystem in memory. It answers the commands that
-// a run builds, so it cannot drift from the commands that a run sends.
+// a run builds, so it cannot drift from the commands that a run sends. Prints
+// holds the answer of `nebula-cert print` for a path, which is how a test sets
+// the authority list that the node reports.
 type fakeNode struct {
 	name     string
 	files    map[string]fakeFile
+	prints   map[string]string
 	noUnit   bool
 	failAll  bool
 	log      []string
@@ -110,7 +113,7 @@ type fakeFile struct {
 }
 
 func newFakeNode(name string) *fakeNode {
-	return &fakeNode{name: name, files: map[string]fakeFile{}}
+	return &fakeNode{name: name, files: map[string]fakeFile{}, prints: map[string]string{}}
 }
 
 func (f *fakeNode) Run(_ context.Context, cmd string) (node.Result, error) {
@@ -150,6 +153,13 @@ func (f *fakeNode) Run(_ context.Context, cmd string) (node.Result, error) {
 		}
 		sum := sha256.Sum256(file.body)
 		return node.Result{Stdout: hex.EncodeToString(sum[:]) + "  " + path + "\n"}, nil
+	case strings.HasPrefix(cmd, "nebula-cert print -json -path "):
+		path := unquote(strings.TrimPrefix(cmd, "nebula-cert print -json -path "))
+		out, ok := f.prints[path]
+		if !ok {
+			return node.Result{ExitCode: 1, Stderr: "open " + path + ": no such file or directory"}, nil
+		}
+		return node.Result{Stdout: out}, nil
 	}
 	return node.Result{ExitCode: 127, Stderr: "command not found: " + cmd}, nil
 }
