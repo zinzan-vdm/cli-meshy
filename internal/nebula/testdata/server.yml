@@ -2,6 +2,7 @@ pki:
   ca: /etc/nebula/meshy-homelab/ca.crt
   cert: /etc/nebula/meshy-homelab/web-1.crt
   key: /etc/nebula/meshy-homelab/web-1.key
+  blocklist: /etc/nebula/meshy-homelab/blocklist.txt
   disconnect_invalid: true
 static_host_map:
   10.42.0.1:

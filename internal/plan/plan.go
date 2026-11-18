@@ -22,7 +22,15 @@ const (
 	KindBinary      Kind = "binary"
 	KindService     Kind = "service"
 	KindInterface   Kind = "interface"
+	KindRevoked     Kind = "revoked"
 )
+
+// Revoked is one certificate that the vault holds and mesh.yml no longer names.
+// The plan reports it, because the run blocks it on every node.
+type Revoked struct {
+	Name        string
+	Fingerprint string
+}
 
 // Change is one difference between the mesh file and a node.
 type Change struct {
@@ -87,6 +95,7 @@ type Input struct {
 	Mesh     config.Mesh
 	Readings []Reading
 	Certs    map[string]node.Cert
+	Revoked  []Revoked
 	Now      time.Time
 }
 
@@ -123,6 +132,19 @@ func Compute(in Input) Report {
 			row.Error = "read a node that " + config.FileName + " does not name"
 		}
 		rows = append(rows, row)
+	}
+
+	// A certificate that the vault holds and the file does not name is a
+	// revocation, and the run acts on it, so the plan names it.
+	for _, revoked := range in.Revoked {
+		if named[revoked.Name] {
+			continue
+		}
+		detail := "blocklist, fingerprint " + revoked.Fingerprint
+		rows = append(rows, Node{
+			Name:    revoked.Name,
+			Changes: []Change{{Kind: KindRevoked, Detail: detail}},
+		})
 	}
 
 	sort.Slice(rows, func(i, j int) bool { return rows[i].Name < rows[j].Name })
