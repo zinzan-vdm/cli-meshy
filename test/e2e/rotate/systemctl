@@ -17,10 +17,12 @@ pidfile="/run/nebula-${mesh}.pid"
 config="/etc/nebula/${mesh}/config.yml"
 logfile="/var/log/nebula-${mesh}.log"
 
+# The pid belongs to root, and the node user asks for the state without sudo.
+# Every user may read /proc, and no user may signal a process of another user.
 running() {
   [ -f "$pidfile" ] || return 1
   pid="$(cat "$pidfile")"
-  [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null
+  [ -n "$pid" ] && [ -d "/proc/$pid" ]
 }
 
 case "$action" in
