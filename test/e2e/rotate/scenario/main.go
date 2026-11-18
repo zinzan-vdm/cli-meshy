@@ -216,7 +216,10 @@ func (c *cluster) waitForTrust(service string) error {
 
 func (c *cluster) startPing() error {
 	_, err := c.composeRun("node-b", "sh", "-c",
-		"rm -f /tmp/rotate-ping.log /tmp/rotate-ping.pid; ping -i 0.2 -W 1 "+peer+" >/tmp/rotate-ping.log 2>&1 & echo $! >/tmp/rotate-ping.pid")
+		// Phase 2 reloads two nodes in about a second, so the interval must be
+		// short enough for the window to hold the samples that the assertion
+		// names.
+		"rm -f /tmp/rotate-ping.log /tmp/rotate-ping.pid; ping -i 0.1 -W 1 "+peer+" >/tmp/rotate-ping.log 2>&1 & echo $! >/tmp/rotate-ping.pid")
 	return err
 }
 
