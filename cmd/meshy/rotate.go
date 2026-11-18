@@ -13,6 +13,7 @@ import (
 	"github.com/zinzan-vdm/cli-meshy/internal/apply"
 	"github.com/zinzan-vdm/cli-meshy/internal/ca"
 	"github.com/zinzan-vdm/cli-meshy/internal/config"
+	"github.com/zinzan-vdm/cli-meshy/internal/issue"
 	"github.com/zinzan-vdm/cli-meshy/internal/nebula"
 	"github.com/zinzan-vdm/cli-meshy/internal/node"
 	"github.com/zinzan-vdm/cli-meshy/internal/revoke"
@@ -30,8 +31,10 @@ func cmdCARotate(args []string) int {
 	switch *phase {
 	case 1:
 		return rotatePhase1(*meshDir)
+	case 2:
+		return rotatePhase2(*meshDir)
 	case 0:
-		fmt.Fprintln(os.Stderr, "meshy ca rotate: name a phase with --phase 1")
+		fmt.Fprintln(os.Stderr, "meshy ca rotate: name a phase with --phase 1 or --phase 2")
 		return 2
 	default:
 		fmt.Fprintf(os.Stderr, "meshy ca rotate: phase %d comes in a later change\n", *phase)
@@ -264,4 +267,301 @@ func formatRotate(report apply.Report) string {
 		}
 	}
 	return out.String()
+}
+
+// rotateAuthority is the authority that signs the certificates of phase 2. The
+// fingerprint is the value that the issuer field of a node certificate must
+// name, so one read back compares it with one string.
+type rotateAuthority struct {
+	name        string
+	cert        []byte
+	key         []byte
+	fingerprint string
+}
+
+// rotatePhase2 makes the new authority active and replaces the certificate of
+// every server node with one that the new authority signed. Every node already
+// trusts both authorities, so a node reloads into its new certificate on a live
+// tunnel. A node that does not come back stops the phase and the rest keep what
+// they hold. See docs/adr/0012.
+func rotatePhase2(meshDir string) int {
+	mesh, err := config.Load(meshDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "meshy ca rotate: %v\n", err)
+		return 2
+	}
+	if problems := mesh.Validate(); len(problems) > 0 {
+		fmt.Fprintf(os.Stderr, "mesh %q has %d problems:\n", mesh.Name, len(problems))
+		for _, problem := range problems {
+			fmt.Fprintf(os.Stderr, "  - %s\n", problem)
+		}
+		return 2
+	}
+	if len(mesh.CA.Trust) < 2 {
+		fmt.Fprintln(os.Stderr, "meshy ca rotate: run phase 1 first")
+		return 1
+	}
+
+	// The highest trusted authority is the one that phase 1 added. An active
+	// authority that already holds that number means the mesh file names it.
+	target := ca.NewActive(mesh.CA.Trust, mesh.CA.Active)
+	name := target
+	if name == "" {
+		// The mesh file already names the authority, so this run only finishes
+		// the nodes that a stopped phase did not reach.
+		name = mesh.CA.Active
+	}
+
+	knownHosts := os.Getenv("MESHY_KNOWN_HOSTS")
+	if knownHosts == "" {
+		fmt.Fprintln(os.Stderr, "meshy ca rotate: MESHY_KNOWN_HOSTS is not set, so a host key cannot be checked")
+		return 2
+	}
+
+	run, code := newRotateRun(*mesh, meshDir)
+	if code != 0 {
+		return code
+	}
+
+	cert, key, found := vault.Certificate(run.record, name)
+	if !found {
+		fmt.Fprintf(os.Stderr, "meshy ca rotate: the vault holds no certificate for authority %s\n", name)
+		return 1
+	}
+	binary, err := run.tool()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "meshy ca rotate: %v\n", err)
+		return 2
+	}
+	printed, err := issue.Print(context.Background(), binary, cert)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "meshy ca rotate: %v\n", err)
+		return 1
+	}
+	bundle, err := vault.TrustBundle(run.record, mesh.CA.Trust)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "meshy ca rotate: %v\n", err)
+		return 1
+	}
+	signers, err := authorityFingerprints(context.Background(), binary, run.record, mesh.CA.Trust)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "meshy ca rotate: %v\n", err)
+		return 1
+	}
+
+	// The file names the authority before the first node is touched, so a run
+	// that stops halfway leaves a mesh file that agrees with the nodes it did
+	// reach. A second run then finishes the nodes that it did not reach.
+	if target != "" {
+		if _, err := config.SetActive(meshDir, name); err != nil {
+			fmt.Fprintf(os.Stderr, "meshy ca rotate: %v\n", err)
+			return 1
+		}
+		after, err := config.Load(meshDir)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "meshy ca rotate: %v\n", err)
+			return 1
+		}
+		run.mesh = after
+		mesh = after
+	}
+
+	report, stopped, untouched := run.rotate(context.Background(), *mesh, rotateAuthority{
+		name:        name,
+		cert:        cert,
+		key:         key,
+		fingerprint: printed.Fingerprint,
+	}, bundle, knownHosts, signers)
+
+	if target != "" {
+		fmt.Printf("authority %s now signs new certificates\n", name)
+		fmt.Printf("mesh.yml now makes %s active\n", name)
+	} else {
+		fmt.Printf("authority %s already signs every certificate\n", name)
+	}
+	fmt.Print(formatRotatePhase2(report, name, untouched))
+	if stopped != "" {
+		fmt.Printf("phase 2 stopped at %s, run phase 2 again when it answers\n", stopped)
+		return 1
+	}
+	if !report.Changed() {
+		fmt.Println("no change")
+	}
+	fmt.Println("next: meshy ca rotate --phase 3")
+	return 0
+}
+
+// rotate signs a certificate for every server node and stops at the first node
+// that does not come back. It returns the nodes that the run did not reach.
+func (r *rotateRun) rotate(ctx context.Context, mesh config.Mesh, next rotateAuthority, bundle []byte, knownHosts string, signers map[string]string) (apply.Report, string, []string) {
+	report := apply.Report{Mesh: mesh.Name, Nodes: []apply.NodeReport{}}
+	stopped := ""
+	var untouched []string
+	for _, target := range mesh.Nodes {
+		if target.Kind != config.KindServer {
+			continue
+		}
+		if stopped != "" {
+			untouched = append(untouched, target.Name)
+			continue
+		}
+		one := r.rotateNode(ctx, mesh, target, next, bundle, knownHosts, signers)
+		report.Add(one)
+		if one.Error != "" {
+			stopped = target.Name
+		}
+	}
+	return report, stopped, untouched
+}
+
+// rotateNode replaces the certificate of one node. It reads the issuer first, so
+// a node that the new authority already signed is not touched a second time,
+// and the pair that the rotation replaced keeps the name of its authority.
+func (r *rotateRun) rotateNode(ctx context.Context, mesh config.Mesh, target config.Node, next rotateAuthority, bundle []byte, knownHosts string, signers map[string]string) apply.NodeReport {
+	report := apply.NodeReport{Name: target.Name}
+
+	rendered, err := nebula.Render(mesh, target)
+	if err != nil {
+		report.Error = err.Error()
+		return report
+	}
+
+	session, err := dialSession(target, knownHosts)
+	if err != nil {
+		report.Error = err.Error()
+		return report
+	}
+	if c, ok := session.(interface{ Close() error }); ok {
+		defer c.Close()
+	}
+
+	held, err := node.ReadCert(ctx, mesh, target, session)
+	if err != nil {
+		report.Error = reason(target, err)
+		return report
+	}
+	if strings.EqualFold(held.Issuer, next.fingerprint) {
+		return report
+	}
+
+	// The certificate is signed from the new authority and sealed in the vault
+	// before the node sees it, so phase 3 and a later apply read the same pair.
+	networks, err := meshNetworks(mesh, target)
+	if err != nil {
+		report.Error = reason(target, err)
+		return report
+	}
+	binary, err := r.tool()
+	if err != nil {
+		report.Error = reason(target, err)
+		return report
+	}
+	signed, err := issue.Sign(ctx, issue.Options{
+		Binary:    binary,
+		Authority: issue.Authority{Cert: next.cert, Key: next.key},
+		Request: issue.Request{
+			Name:     target.Name,
+			Networks: networks,
+			Groups:   target.Groups,
+			Lifetime: lifetime(mesh, target),
+		},
+	})
+	if err != nil {
+		report.Error = reason(target, err)
+		return report
+	}
+	if cert, key, ok := vault.Certificate(r.record, target.Name); ok {
+		vault.KeepPrevious(r.record, target.Name, signerOf(signers, held.Issuer), cert, key)
+	}
+	vault.SetCertificate(r.record, target.Name, signed.Cert, signed.Key)
+	r.changed = true
+	if err := vault.Write(r.meshDir, r.dir, r.record); err != nil {
+		report.Error = reason(target, err)
+		return report
+	}
+
+	result, err := apply.Run(ctx, mesh, target, apply.Files{
+		Config:    rendered,
+		Authority: bundle,
+		Cert:      signed.Cert,
+		Key:       signed.Key,
+		Blocklist: r.block,
+	}, session)
+	report.Writes = result.Writes
+	report.Action = result.Action
+	report.Renewed = true
+	if err != nil {
+		report.Error = reason(target, err)
+		return report
+	}
+
+	// The read back is the proof: the certificate on the node names the new
+	// authority, and the bundle on the node holds every trusted authority.
+	held, err = node.ReadCert(ctx, mesh, target, session)
+	if err != nil {
+		report.Error = reason(target, err)
+		return report
+	}
+	if !strings.EqualFold(held.Issuer, next.fingerprint) {
+		report.Error = fmt.Sprintf("the node reports issuer %q, %s did not sign its certificate", held.Issuer, next.name)
+		return report
+	}
+	certs, err := node.ReadAuthorities(ctx, mesh, target, session)
+	if err != nil {
+		report.Error = reason(target, err)
+		return report
+	}
+	if missing := missingAuthority(certs, mesh.CA.Trust); missing != "" {
+		report.Error = fmt.Sprintf("the trust bundle on the node does not hold %s", missing)
+	}
+	return report
+}
+
+// formatRotatePhase2 writes one line for each node, and one line for each node
+// that the run did not reach.
+func formatRotatePhase2(report apply.Report, authority string, untouched []string) string {
+	var out strings.Builder
+	for _, n := range report.Nodes {
+		switch {
+		case n.Error != "":
+			fmt.Fprintf(&out, "%s: failed: %s\n", n.Name, n.Error)
+		case len(n.Writes) == 0:
+			fmt.Fprintf(&out, "%s: unchanged\n", n.Name)
+		default:
+			fmt.Fprintf(&out, "%s: signed by %s, %s\n", n.Name, authority, applied(n))
+		}
+	}
+	for _, name := range untouched {
+		fmt.Fprintf(&out, "%s: not reached\n", name)
+	}
+	return out.String()
+}
+
+// authorityFingerprints maps the fingerprint of each trusted authority to its
+// name. A certificate names its issuer by fingerprint, so this map turns that
+// field back into the name of an authority.
+func authorityFingerprints(ctx context.Context, binary string, record vault.Record, trust []string) (map[string]string, error) {
+	byPrint := make(map[string]string, len(trust))
+	for _, name := range trust {
+		cert, _, found := vault.Certificate(record, name)
+		if !found {
+			continue
+		}
+		printed, err := issue.Print(ctx, binary, cert)
+		if err != nil {
+			return nil, err
+		}
+		byPrint[strings.ToLower(printed.Fingerprint)] = name
+	}
+	return byPrint, nil
+}
+
+// signerOf returns the name of the authority that a fingerprint names. A
+// certificate from an authority that the mesh does not trust keeps its
+// fingerprint as the name, because the pair must not lose its record.
+func signerOf(signers map[string]string, fingerprint string) string {
+	if name := signers[strings.ToLower(fingerprint)]; name != "" {
+		return name
+	}
+	return fingerprint
 }

@@ -2,7 +2,7 @@
 
 `meshy` builds and maintains private overlay networks on top of Nebula. One git repository describes one mesh. A pull request plans the change, a merge applies it, and a GitHub Actions runner does the work. `meshy` also runs locally with the same code path.
 
-Status: pre-alpha. `init`, `validate`, `plan`, `ca init`, `ca rotate --phase 1`, `issue`, `bootstrap`, `install`, `bundle`, `unlock`, `lock`, and `apply` work.
+Status: pre-alpha. `init`, `validate`, `plan`, `ca init`, `ca rotate --phase 1` and `--phase 2`, `issue`, `bootstrap`, `install`, `bundle`, `unlock`, `lock`, and `apply` work.
 
 ## What it does
 
@@ -133,9 +133,19 @@ meshy ca rotate --phase 1
 
 The command creates the next authority, seals it in the vault, adds it to `ca.trust` in `mesh.yml`, and writes the new bundle to every server node. It reads the authority list back from each node and prints the phase that comes next. Phase 1 signs no certificate, so a node that the run does not reach keeps its old certificate and keeps working.
 
+Phase 2 makes that authority active and signs a new certificate for every server node:
+
+```sh
+meshy ca rotate --phase 2
+```
+
+The command changes `ca.active` in `mesh.yml`, signs a certificate from the new authority, writes it to the node, and reloads the unit. It reads the signing authority back from every server node. The vault keeps the old certificate until phase 3, so the old authority stays valid.
+
 The command refuses to run when `ca.trust` already holds two authorities, and when the vault is locked. The exit code is 0 when every node took the bundle, 1 when at least one node failed, and 2 when the run never started.
 
-The decision is in [docs/adr/0011](docs/adr/0011-a-trust-bundle-is-one-file-of-certificates.md). The rule for the edit is in [docs/patterns/0020](docs/patterns/0020-an-edit-to-mesh-yml-keeps-every-other-byte.md).
+Phase 2 refuses while `ca.trust` holds one authority, and it stops at the first node that does not come back. A mesh that the new authority already signs is reported as no change.
+
+The decisions are in [docs/adr/0011](docs/adr/0011-a-trust-bundle-is-one-file-of-certificates.md) and [docs/adr/0012](docs/adr/0012-phase-2-changes-the-active-authority.md). The rules for the edit and the write are in [docs/patterns/0020](docs/patterns/0020-an-edit-to-mesh-yml-keeps-every-other-byte.md) and [0021](docs/patterns/0021-a-rotation-signs-then-reloads.md).
 
 ### Join a user node
 
@@ -171,8 +181,8 @@ The decisions are in [docs/adr/0010](docs/adr/0010-one-archive-carries-every-ins
 | `install` | works |
 | `bundle` | works |
 | `bootstrap` | works |
-| `ca rotate --phase 1` | works |
-| `ca rotate --phase 2` and `--phase 3` | planned |
+| `ca rotate --phase 1`, `ca rotate --phase 2` | works |
+| `ca rotate --phase 3` | planned |
 
 `--mesh <dir>` selects the directory that holds `mesh.yml`. It defaults to the current directory.
 

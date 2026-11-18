@@ -96,15 +96,18 @@ func openApplyVault(t *testing.T, meshDir string, names ...string) {
 // holds the answer of `nebula-cert print` for a path, which is how a test sets
 // the authority list that the node reports.
 type fakeNode struct {
-	name     string
-	files    map[string]fakeFile
-	prints   map[string]string
-	noUnit   bool
-	failAll  bool
-	log      []string
-	writes   int
-	reloads  int
-	restarts int
+	name   string
+	files  map[string]fakeFile
+	prints map[string]string
+	// printsAfter holds the answer that the node gives for a path once the run
+	// has written that path, so a read back sees what the write changed.
+	printsAfter map[string]string
+	noUnit      bool
+	failAll     bool
+	log         []string
+	writes      int
+	reloads     int
+	restarts    int
 }
 
 type fakeFile struct {
@@ -113,7 +116,12 @@ type fakeFile struct {
 }
 
 func newFakeNode(name string) *fakeNode {
-	return &fakeNode{name: name, files: map[string]fakeFile{}, prints: map[string]string{}}
+	return &fakeNode{
+		name:        name,
+		files:       map[string]fakeFile{},
+		prints:      map[string]string{},
+		printsAfter: map[string]string{},
+	}
 }
 
 func (f *fakeNode) Run(_ context.Context, cmd string) (node.Result, error) {
@@ -155,6 +163,11 @@ func (f *fakeNode) Run(_ context.Context, cmd string) (node.Result, error) {
 		return node.Result{Stdout: hex.EncodeToString(sum[:]) + "  " + path + "\n"}, nil
 	case strings.HasPrefix(cmd, "nebula-cert print -json -path "):
 		path := unquote(strings.TrimPrefix(cmd, "nebula-cert print -json -path "))
+		if out, ok := f.printsAfter[path]; ok {
+			if _, written := f.files[path]; written {
+				return node.Result{Stdout: out}, nil
+			}
+		}
 		out, ok := f.prints[path]
 		if !ok {
 			return node.Result{ExitCode: 1, Stderr: "open " + path + ": no such file or directory"}, nil

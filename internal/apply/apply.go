@@ -74,6 +74,16 @@ func (r *Report) Add(n NodeReport) {
 // Clean reports that every node matches the mesh file.
 func (r Report) Clean() bool { return r.Failed == 0 }
 
+// Changed reports that the run wrote a file to at least one node.
+func (r Report) Changed() bool {
+	for _, n := range r.Nodes {
+		if len(n.Writes) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
 // Action is what a run did to the unit after the writes.
 type Action string
 

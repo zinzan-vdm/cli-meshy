@@ -22,3 +22,24 @@ func TestNextCountsUpFromTheTrustedAuthority(t *testing.T) {
 		}
 	}
 }
+
+func TestNewActiveReturnsTheAuthorityThatOutranksTheActiveOne(t *testing.T) {
+	cases := []struct {
+		names  []string
+		active string
+		want   string
+	}{
+		{[]string{"ca-1", "ca-2"}, "ca-1", "ca-2"},
+		{[]string{"ca-1", "ca-2"}, "ca-2", ""},
+		{[]string{"ca-2", "ca-1"}, "ca-1", "ca-2"},
+		{[]string{"ca-1", "ca-10"}, "ca-2", "ca-10"},
+		{[]string{"ca-1"}, "ca-1", ""},
+		{[]string{"ca-1", "ca-2", "ca-3"}, "ca-2", "ca-3"},
+	}
+
+	for _, c := range cases {
+		if got := NewActive(c.names, c.active); got != c.want {
+			t.Errorf("NewActive(%v, %q) = %q, want %q", c.names, c.active, got, c.want)
+		}
+	}
+}
