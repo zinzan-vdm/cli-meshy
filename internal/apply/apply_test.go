@@ -179,17 +179,18 @@ func TestRunWritesEveryFileThroughATemporaryName(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 
-	want := []string{"config.yml", "ca.crt", "core-1.crt", "core-1.key"}
+	want := []string{"blocklist.txt", "config.yml", "ca.crt", "core-1.crt", "core-1.key"}
 	if strings.Join(res.Writes, " ") != strings.Join(want, " ") {
 		t.Fatalf("writes = %v, want %v", res.Writes, want)
 	}
 
 	dir := node.Dir(m.Name)
 	for name, mode := range map[string]fs.FileMode{
-		"config.yml": 0o600,
-		"ca.crt":     0o644,
-		"core-1.crt": 0o644,
-		"core-1.key": 0o600,
+		"blocklist.txt": 0o644,
+		"config.yml":    0o600,
+		"ca.crt":        0o644,
+		"core-1.crt":    0o644,
+		"core-1.key":    0o600,
 	} {
 		path := filepath.Join(dir, name)
 		file, ok := f.files[path]
@@ -391,8 +392,8 @@ func TestRunNamesTheUnitWhenTheReloadFails(t *testing.T) {
 	if !strings.Contains(err.Error(), unitName(m.Name)) {
 		t.Errorf("the error does not name the unit: %v", err)
 	}
-	if len(res.Writes) != 4 {
-		t.Errorf("writes = %v, want the four files that reached the node", res.Writes)
+	if len(res.Writes) != 5 {
+		t.Errorf("writes = %v, want the five files that reached the node", res.Writes)
 	}
 	if _, ok := f.files[node.Dir(m.Name)+"/config.yml"]; !ok {
 		t.Error("the written config left the node")

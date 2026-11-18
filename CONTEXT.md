@@ -68,6 +68,14 @@ _Avoid_: tun, device, adapter
 The overlay IP a node holds inside a mesh. It is written in the mesh file.
 _Avoid_: IP, tunnel IP, node IP
 
+**Revocation**:
+The removal of a node from a mesh. It blocks the fingerprint on every node, deletes the certificate and the key from the vault, and keeps the fingerprint.
+_Avoid_: delete, kick, ban, eject
+
+**Blocklist**:
+The file on a node that holds the fingerprints it refuses. The config names a fixed path, so the config does not change when a node is revoked.
+_Avoid_: denylist, blacklist, revocation list
+
 **Review**:
 The human approval of a pull request before the merge reaches the nodes.
 _Avoid_: sign-off, approval, check

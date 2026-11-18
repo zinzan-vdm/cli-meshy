@@ -181,19 +181,30 @@ func (r *issueRun) node(ctx context.Context, n config.Node) (bool, int) {
 // networks writes the node address with the mesh prefix, because nebula-cert
 // takes the address of a node as a network.
 func (r *issueRun) networks(n config.Node) (string, error) {
-	prefix, err := netip.ParsePrefix(r.mesh.CIDR)
+	return meshNetworks(*r.mesh, n)
+}
+
+// meshNetworks writes the node address with the mesh prefix, because
+// nebula-cert takes the address of a node as a network.
+func meshNetworks(mesh config.Mesh, n config.Node) (string, error) {
+	prefix, err := netip.ParsePrefix(mesh.CIDR)
 	if err != nil {
-		return "", fmt.Errorf("cidr %q is not readable: %w", r.mesh.CIDR, err)
+		return "", fmt.Errorf("cidr %q is not readable: %w", mesh.CIDR, err)
 	}
 	return fmt.Sprintf("%s/%d", n.IP, prefix.Bits()), nil
 }
 
 // lifetime returns the certificate lifetime for the kind of the node.
 func (r *issueRun) lifetime(n config.Node) time.Duration {
+	return lifetime(*r.mesh, n)
+}
+
+// lifetime returns the certificate lifetime for the kind of the node.
+func lifetime(mesh config.Mesh, n config.Node) time.Duration {
 	if n.Kind == config.KindUser {
-		return r.mesh.Certificates.User.Duration
+		return mesh.Certificates.User.Duration
 	}
-	return r.mesh.Certificates.Server.Duration
+	return mesh.Certificates.Server.Duration
 }
 
 // issueTargets returns the nodes that a run covers.

@@ -1,14 +1,14 @@
 ---
 # MESHY-013
 title: A merge changes the mesh
-status: todo
+status: completed
 type: epic
 priority: high
 tags:
     - apply
     - ssh
 created_at: 2026-11-17T19:22:37Z
-updated_at: 2026-11-18T00:45:00Z
+updated_at: 2026-11-18T09:30:00Z
 ---
 ## Overview
 
@@ -81,3 +81,9 @@ One test is gated on a real sshd. It is skipped unless `MESHY_TEST_SSHD` names a
 - [ ] A mesh that fails validation writes nothing.
 - [ ] A failure on one node still applies the others, and the exit code is 1.
 - [ ] No apply installs or changes a binary.
+
+## Status
+
+All five tasks of the delivery table are complete: 007, 014, 015, 016, and 042. `apply` runs every server node, renews a certificate inside the window, blocks a node that left the mesh, and reports one line for each node.
+
+One proof is not in this epic. The claim that a blocked node cannot complete a handshake needs a live mesh, and this host cannot run one. That proof belongs to [MESHY-031](MESHY-031--a-rule-that-is-written-is-enforced-on-a-live-mesh.md), which is a draft in [MESHY-028](MESHY-028--tests-prove-the-claims.md). The mechanism is proved in the unit tests: the fingerprint reaches the blocklist of every node, and the certificate and key leave the vault.

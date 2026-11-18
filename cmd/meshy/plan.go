@@ -6,13 +6,18 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/zinzan-vdm/cli-meshy/internal/ca"
 	"github.com/zinzan-vdm/cli-meshy/internal/config"
+	"github.com/zinzan-vdm/cli-meshy/internal/issue"
 	"github.com/zinzan-vdm/cli-meshy/internal/node"
 	"github.com/zinzan-vdm/cli-meshy/internal/plan"
+	"github.com/zinzan-vdm/cli-meshy/internal/revoke"
 	"github.com/zinzan-vdm/cli-meshy/internal/sshx"
+	"github.com/zinzan-vdm/cli-meshy/internal/vault"
 )
 
 func cmdPlan(args []string) int {
@@ -44,11 +49,7 @@ func cmdPlan(args []string) int {
 		return 2
 	}
 
-	report := plan.Compute(plan.Input{
-		Mesh:     *mesh,
-		Readings: readNodes(*mesh, knownHosts),
-		Now:      time.Now(),
-	})
+	report := plan.Compute(planInput(*mesh, *meshDir, knownHosts))
 
 	if *asJSON {
 		body, err := formatJSON(report)
@@ -62,6 +63,44 @@ func cmdPlan(args []string) int {
 	}
 
 	return exitCode(report)
+}
+
+// planInput reads every node and, when the vault is open, the certificates that
+// it holds. A closed vault is not an error, because a pull request from a fork
+// holds no shares, so the plan covers what it can see.
+func planInput(mesh config.Mesh, meshDir, knownHosts string) plan.Input {
+	in := plan.Input{Mesh: mesh, Readings: readNodes(mesh, knownHosts), Now: time.Now(), Certs: map[string]node.Cert{}}
+
+	record, err := vault.Read(filepath.Join(meshDir, vault.DirName))
+	if err != nil {
+		return in
+	}
+	binary, err := ca.Find(meshDir, mesh.Nebula.Version)
+	if err != nil {
+		return in
+	}
+
+	ctx := context.Background()
+	for _, n := range mesh.Nodes {
+		cert, _, ok := vault.Certificate(record, n.Name)
+		if !ok {
+			continue
+		}
+		printed, err := issue.Print(ctx, binary, cert)
+		if err != nil || printed.Fingerprint == "" {
+			continue
+		}
+		in.Certs[n.Name] = printed
+	}
+
+	revoked, err := revoke.List(ctx, binary, record, mesh)
+	if err != nil {
+		return in
+	}
+	for _, n := range revoked {
+		in.Revoked = append(in.Revoked, plan.Revoked{Name: n.Name, Fingerprint: n.Fingerprint})
+	}
+	return in
 }
 
 // exitCode keeps the three outcomes apart: a match, a difference, and a plan

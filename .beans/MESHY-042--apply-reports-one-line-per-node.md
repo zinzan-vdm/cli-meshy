@@ -1,14 +1,14 @@
 ---
 # MESHY-042
 title: Apply reports one line per node
-status: todo
+status: completed
 type: task
 priority: high
 tags:
     - apply
     - cli
 created_at: 2026-11-18T00:40:00Z
-updated_at: 2026-11-18T00:40:00Z
+updated_at: 2026-11-18T09:30:00Z
 parent: MESHY-013
 blocked_by:
     - MESHY-007
@@ -63,10 +63,27 @@ meshy apply [--mesh <dir>] [--node <name>] [--dry-run] [--json]
 
 ## Acceptance Criteria
 
-- [ ] One failing node leaves the others applied, and the exit code is 1.
-- [ ] The summary names the failed node and the reason.
-- [ ] A mesh that fails validation writes nothing and exits 2.
-- [ ] A second run writes nothing and exits 0.
-- [ ] `--node` reaches one node and refuses an unknown name with exit 2.
-- [ ] `--dry-run` writes nothing and prints the same report as `meshy plan`.
-- [ ] Apply changes no binary.
+- [x] One failing node leaves the others applied, and the exit code is 1.
+- [x] The summary names the failed node and the reason.
+- [x] A mesh that fails validation writes nothing and exits 2.
+- [x] A second run writes nothing and exits 0.
+- [x] `--node` reaches one node and refuses an unknown name with exit 2.
+- [x] `--dry-run` writes nothing and prints the same report as `meshy plan`.
+- [x] Apply changes no binary.
+
+## Summary of Changes
+
+| File | Change |
+|---|---|
+| `cmd/meshy/apply.go` | `cmdApply` takes `--node`, `--mesh`, `--dry-run`, and `--json`. `applyRun.run` covers every target, keeps going when a node fails, and writes the records once. `formatApply` writes one line for each node, and `revoked <node> (<fingerprint>)` for each block. |
+| `internal/apply/apply.go` | `Report`, `NodeReport`, `Revocation`, and `Report.Add`. The JSON field names are the schema. |
+| `cmd/meshy/main.go` | The usage line for apply. |
+| `README.md` | The apply section, the exit contract, and the flag list. |
+
+## Deviations
+
+`--json` prints the report of the run, not the report of the plan with an action added. The plan reports the differences that a reviewer must see, and the run reports what it did. The run has no `Change` list, because it acts on the files that it wrote. The JSON holds `mesh`, `revoked`, `nodes`, and `failed`, and each node holds `name`, `renewed`, `writes`, `action`, and `error`.
+
+## Verification
+
+`TestApplyAppliesEveryServerNodeAndSkipsAUserNode`, `TestApplyContinuesAfterANodeFails`, `TestApplyLimitsTheRunToTheNodeThatTheFlagNames`, `TestApplySecondRunWritesNothing`, `TestApplyDryRunPrintsThePlanAndWritesNothing`, and `TestApplyPrintsTheReportAsJSON` cover the flags, the isolation, the exit codes, and the report. `TestApplyRenewsAndRevokesWithTheRealTool` runs the whole path with the real tool.

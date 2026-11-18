@@ -63,6 +63,7 @@ func Render(mesh config.Mesh, node config.Node) ([]byte, error) {
 			CA:                dir + "/ca.crt",
 			Cert:              dir + "/" + node.Name + ".crt",
 			Key:               dir + "/" + node.Name + ".key",
+			Blocklist:         BlocklistPath(mesh.Name),
 			DisconnectInvalid: true,
 		},
 		StaticHostMap: staticHostMap,
@@ -122,6 +123,7 @@ type pki struct {
 	CA                string `yaml:"ca"`
 	Cert              string `yaml:"cert"`
 	Key               string `yaml:"key"`
+	Blocklist         string `yaml:"blocklist"`
 	DisconnectInvalid bool   `yaml:"disconnect_invalid"`
 }
 
@@ -157,4 +159,10 @@ type logging struct {
 
 func ConfigPath(meshName, nodeName string) string {
 	return strings.TrimSuffix(ConfigDir(meshName), "/") + "/config.yml"
+}
+
+// BlocklistPath is where a node keeps the fingerprints it refuses. The path is
+// fixed, so the rendered config does not change when a node is revoked.
+func BlocklistPath(meshName string) string {
+	return ConfigDir(meshName) + "/blocklist.txt"
 }

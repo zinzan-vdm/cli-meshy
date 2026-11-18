@@ -2,6 +2,9 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"io"
 	"io/fs"
@@ -9,10 +12,10 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/zinzan-vdm/cli-meshy/internal/apply"
 	"github.com/zinzan-vdm/cli-meshy/internal/config"
-	"github.com/zinzan-vdm/cli-meshy/internal/nebula"
 	"github.com/zinzan-vdm/cli-meshy/internal/node"
 	"github.com/zinzan-vdm/cli-meshy/internal/vault"
 )
@@ -88,28 +91,133 @@ func openApplyVault(t *testing.T, meshDir string, names ...string) {
 	}
 }
 
+// fakeNode is one node with a filesystem in memory. It answers the commands that
+// a run builds, so it cannot drift from the commands that a run sends.
+type fakeNode struct {
+	name     string
+	files    map[string]fakeFile
+	noUnit   bool
+	failAll  bool
+	log      []string
+	writes   int
+	reloads  int
+	restarts int
+}
+
+type fakeFile struct {
+	body []byte
+	mode fs.FileMode
+}
+
+func newFakeNode(name string) *fakeNode {
+	return &fakeNode{name: name, files: map[string]fakeFile{}}
+}
+
+func (f *fakeNode) Run(_ context.Context, cmd string) (node.Result, error) {
+	f.log = append(f.log, cmd)
+
+	if f.failAll {
+		return node.Result{ExitCode: 1, Stderr: "connection reset"}, nil
+	}
+	switch {
+	case strings.HasPrefix(cmd, "systemctl cat "):
+		if f.noUnit {
+			return node.Result{ExitCode: 1, Stderr: "No files found for nebula@meshy-homelab.service."}, nil
+		}
+		return node.Result{}, nil
+	case strings.HasPrefix(cmd, "systemctl is-active "):
+		return node.Result{Stdout: "active\n"}, nil
+	case strings.HasPrefix(cmd, "sudo -n systemctl reload "):
+		f.reloads++
+		return node.Result{}, nil
+	case strings.HasPrefix(cmd, "sudo -n systemctl restart "):
+		f.restarts++
+		return node.Result{}, nil
+	case strings.HasPrefix(cmd, "mv -f "):
+		from, to := movePaths(cmd)
+		file, ok := f.files[from]
+		if !ok {
+			return node.Result{ExitCode: 1, Stderr: "No such file or directory"}, nil
+		}
+		delete(f.files, from)
+		f.files[to] = file
+		return node.Result{}, nil
+	case strings.HasPrefix(cmd, "sha256sum "):
+		path := unquote(strings.TrimPrefix(cmd, "sha256sum "))
+		file, ok := f.files[path]
+		if !ok {
+			return node.Result{ExitCode: 1, Stderr: "No such file or directory"}, nil
+		}
+		sum := sha256.Sum256(file.body)
+		return node.Result{Stdout: hex.EncodeToString(sum[:]) + "  " + path + "\n"}, nil
+	}
+	return node.Result{ExitCode: 127, Stderr: "command not found: " + cmd}, nil
+}
+
+func (f *fakeNode) Write(_ context.Context, path string, data []byte, mode fs.FileMode) error {
+	f.writes++
+	f.files[path] = fakeFile{body: append([]byte(nil), data...), mode: mode}
+	return nil
+}
+
+func (f *fakeNode) Read(_ context.Context, path string) ([]byte, error) {
+	file, ok := f.files[path]
+	if !ok {
+		return nil, node.ErrNoFile
+	}
+	return file.body, nil
+}
+
+func (f *fakeNode) read(path string) string {
+	file, ok := f.files[path]
+	if !ok {
+		return ""
+	}
+	return string(file.body)
+}
+
+// useFakes makes every dial return the fake that the node name selects. It
+// returns the map so a test can read the state that the run left.
+func useFakes(t *testing.T, names ...string) map[string]*fakeNode {
+	t.Helper()
+
+	nodes := make(map[string]*fakeNode, len(names))
+	for _, name := range names {
+		nodes[name] = newFakeNode(name)
+	}
+
+	old := dialSession
+	dialSession = func(n config.Node, _ string) (apply.Session, error) {
+		fake, ok := nodes[n.Name]
+		if !ok {
+			return nil, errors.New("no fake for " + n.Name)
+		}
+		return fake, nil
+	}
+	t.Cleanup(func() { dialSession = old })
+	return nodes
+}
+
+func movePaths(cmd string) (string, string) {
+	parts := strings.Split(strings.TrimPrefix(cmd, "mv -f "), "' '")
+	if len(parts) != 2 {
+		return "", ""
+	}
+	return unquote(parts[0]), unquote(parts[1])
+}
+
+func unquote(s string) string { return strings.Trim(s, "'") }
+
 func TestApplyIsInTheDispatchAndTheUsage(t *testing.T) {
 	out, _, code := captureBoth(t, func() int { return run([]string{"help"}) })
 	if code != 0 {
 		t.Fatalf("help exit = %d, want 0", code)
 	}
-	if !strings.Contains(out, "apply      write the config and the certificate to one node") {
+	if !strings.Contains(out, "apply      make every node match mesh.yml") {
 		t.Errorf("the usage does not list apply:\n%s", out)
 	}
 	if strings.Contains(out, "apply, bundle") {
 		t.Error("the usage still lists apply as planned")
-	}
-}
-
-func TestApplyRefusesWithoutANode(t *testing.T) {
-	dir := writeApplyMesh(t)
-
-	_, errOut, code := captureBoth(t, func() int { return run([]string{"apply", "--mesh", dir}) })
-	if code != 2 {
-		t.Errorf("exit = %d, want 2", code)
-	}
-	if !strings.Contains(errOut, "--node") {
-		t.Errorf("the error does not name the flag: %q", errOut)
 	}
 }
 
@@ -140,7 +248,7 @@ func TestApplyRefusesAUserNode(t *testing.T) {
 func TestApplyRefusesAMeshThatDoesNotLoad(t *testing.T) {
 	dir := t.TempDir()
 
-	_, errOut, code := captureBoth(t, func() int { return run([]string{"apply", "--mesh", dir, "--node", "core-1"}) })
+	_, errOut, code := captureBoth(t, func() int { return run([]string{"apply", "--mesh", dir}) })
 	if code != 2 {
 		t.Errorf("exit = %d, want 2", code)
 	}
@@ -161,7 +269,7 @@ func TestApplyRefusesAMeshWithProblems(t *testing.T) {
 		t.Fatalf("write mesh: %v", err)
 	}
 
-	out, _, code := captureBoth(t, func() int { return run([]string{"apply", "--mesh", dir, "--node", "core-1"}) })
+	out, _, code := captureBoth(t, func() int { return run([]string{"apply", "--mesh", dir}) })
 	if code != 2 {
 		t.Errorf("exit = %d, want 2", code)
 	}
@@ -174,7 +282,7 @@ func TestApplySaysUnlockWhenTheVaultIsClosed(t *testing.T) {
 	dir := writeApplyMesh(t)
 	t.Setenv("MESHY_KNOWN_HOSTS", filepath.Join(dir, "known_hosts"))
 
-	_, errOut, code := captureBoth(t, func() int { return run([]string{"apply", "--mesh", dir, "--node", "core-1"}) })
+	_, errOut, code := captureBoth(t, func() int { return run([]string{"apply", "--mesh", dir}) })
 	if code != 2 {
 		t.Errorf("exit = %d, want 2", code)
 	}
@@ -183,126 +291,278 @@ func TestApplySaysUnlockWhenTheVaultIsClosed(t *testing.T) {
 	}
 }
 
-func TestApplySaysIssueWhenTheNodeHasNoCertificate(t *testing.T) {
+func TestApplyRefusesWithoutKnownHosts(t *testing.T) {
 	dir := writeApplyMesh(t)
-	openApplyVault(t, dir)
-	t.Setenv("MESHY_KNOWN_HOSTS", filepath.Join(dir, "known_hosts"))
+	openApplyVault(t, dir, "core-1", "web-1")
 
-	_, errOut, code := captureBoth(t, func() int { return run([]string{"apply", "--mesh", dir, "--node", "core-1"}) })
+	_, errOut, code := captureBoth(t, func() int { return run([]string{"apply", "--mesh", dir}) })
 	if code != 2 {
 		t.Errorf("exit = %d, want 2", code)
 	}
-	if !strings.Contains(errOut, "run meshy issue core-1") {
-		t.Errorf("the error does not send the maintainer to issue: %q", errOut)
+	if !strings.Contains(errOut, "MESHY_KNOWN_HOSTS") {
+		t.Errorf("the error does not name the variable: %q", errOut)
 	}
 }
 
-func TestApplyFilesTakesTheVaultMaterialAndTheRenderedConfig(t *testing.T) {
+func TestApplyAppliesEveryServerNodeAndSkipsAUserNode(t *testing.T) {
 	dir := writeApplyMesh(t)
-	openApplyVault(t, dir, "core-1")
-
-	mesh, err := config.Load(dir)
-	if err != nil {
-		t.Fatalf("load: %v", err)
-	}
-	target, found := applyTarget(*mesh, "core-1")
-	if !found {
-		t.Fatal("core-1 is not in the mesh")
-	}
-
-	files, code := applyFiles(*mesh, target, dir)
-	if code != 0 {
-		t.Fatalf("applyFiles exit = %d, want 0", code)
-	}
-	if string(files.Authority) != "authority certificate\n" {
-		t.Errorf("authority = %q", files.Authority)
-	}
-	if string(files.Cert) != "core-1 certificate\n" || string(files.Key) != "core-1 key\n" {
-		t.Errorf("certificate = %q, key = %q", files.Cert, files.Key)
-	}
-
-	rendered, err := nebula.Render(*mesh, target)
-	if err != nil {
-		t.Fatalf("render: %v", err)
-	}
-	if string(files.Config) != string(rendered) {
-		t.Error("the config is not the rendered config")
-	}
-}
-
-// noUnitSession answers every command as a node that was never bootstrapped.
-type noUnitSession struct{}
-
-func (noUnitSession) Run(context.Context, string) (node.Result, error) {
-	return node.Result{ExitCode: 1, Stderr: "No files found for nebula@meshy-homelab.service."}, nil
-}
-
-func (noUnitSession) Read(context.Context, string) ([]byte, error) {
-	return nil, errors.New("the run read a file from a node with no unit")
-}
-
-func (noUnitSession) Write(context.Context, string, []byte, fs.FileMode) error {
-	return errors.New("the run wrote to a node with no unit")
-}
-
-func TestApplyExitsOneAndNamesBootstrapWhenTheUnitIsMissing(t *testing.T) {
-	dir := writeApplyMesh(t)
-	openApplyVault(t, dir, "core-1")
+	openApplyVault(t, dir, "core-1", "web-1")
+	stubSigner(t)
 	t.Setenv("MESHY_KNOWN_HOSTS", filepath.Join(dir, "known_hosts"))
+	nodes := useFakes(t, "core-1", "web-1")
 
-	old := dialSession
-	dialSession = func(config.Node, string) (apply.Session, error) { return noUnitSession{}, nil }
-	t.Cleanup(func() { dialSession = old })
+	out, errOut, code := captureBoth(t, func() int { return run([]string{"apply", "--mesh", dir}) })
+	if code != 0 {
+		t.Fatalf("exit = %d, want 0: %s", code, errOut)
+	}
+	for _, name := range []string{"core-1", "web-1"} {
+		if !strings.Contains(out, name+": wrote blocklist.txt config.yml") {
+			t.Errorf("the report does not name %s: %q", name, out)
+		}
+		if nodes[name].reloads != 1 {
+			t.Errorf("%s reloaded %d times, want 1", name, nodes[name].reloads)
+		}
+	}
+	if strings.Contains(out, "laptop-1") {
+		t.Errorf("the report names a user node: %q", out)
+	}
+	if !strings.Contains(out, "reloaded") {
+		t.Errorf("the report does not name the reload: %q", out)
+	}
+}
 
-	out, errOut, code := captureBoth(t, func() int { return run([]string{"apply", "--mesh", dir, "--node", "core-1"}) })
+func TestApplyLimitsTheRunToTheNodeThatTheFlagNames(t *testing.T) {
+	dir := writeApplyMesh(t)
+	openApplyVault(t, dir, "core-1", "web-1")
+	stubSigner(t)
+	t.Setenv("MESHY_KNOWN_HOSTS", filepath.Join(dir, "known_hosts"))
+	nodes := useFakes(t, "core-1", "web-1")
+
+	out, _, code := captureBoth(t, func() int { return run([]string{"apply", "--mesh", dir, "--node", "web-1"}) })
+	if code != 0 {
+		t.Fatalf("exit = %d, want 0", code)
+	}
+	if strings.Contains(out, "core-1") {
+		t.Errorf("the run reached a node that the flag did not name: %q", out)
+	}
+	if len(nodes["core-1"].log) != 0 {
+		t.Errorf("core-1 saw %d commands, want none", len(nodes["core-1"].log))
+	}
+}
+
+func TestApplyContinuesAfterANodeFails(t *testing.T) {
+	dir := writeApplyMesh(t)
+	openApplyVault(t, dir, "core-1", "web-1")
+	stubSigner(t)
+	t.Setenv("MESHY_KNOWN_HOSTS", filepath.Join(dir, "known_hosts"))
+	nodes := useFakes(t, "core-1", "web-1")
+	nodes["core-1"].failAll = true
+
+	out, _, code := captureBoth(t, func() int { return run([]string{"apply", "--mesh", dir}) })
 	if code != 1 {
 		t.Errorf("exit = %d, want 1", code)
 	}
-	if !strings.Contains(errOut, "run meshy bootstrap core-1") {
-		t.Errorf("the error does not name the bootstrap command: %q", errOut)
+	if !strings.Contains(out, "core-1: failed: ") {
+		t.Errorf("the report does not name the failed node: %q", out)
+	}
+	if !strings.Contains(out, "web-1: wrote blocklist.txt") {
+		t.Errorf("the run stopped before the second node: %q", out)
+	}
+	if nodes["web-1"].reloads != 1 {
+		t.Errorf("web-1 reloaded %d times, want 1", nodes["web-1"].reloads)
+	}
+}
+
+func TestApplyNamesBootstrapWhenTheUnitIsMissing(t *testing.T) {
+	dir := writeApplyMesh(t)
+	openApplyVault(t, dir, "core-1")
+	stubSigner(t)
+	t.Setenv("MESHY_KNOWN_HOSTS", filepath.Join(dir, "known_hosts"))
+	nodes := useFakes(t, "core-1")
+	nodes["core-1"].noUnit = true
+
+	out, _, code := captureBoth(t, func() int { return run([]string{"apply", "--mesh", dir, "--node", "core-1"}) })
+	if code != 1 {
+		t.Errorf("exit = %d, want 1", code)
+	}
+	if !strings.Contains(out, "run meshy bootstrap core-1") {
+		t.Errorf("the report does not name the bootstrap: %q", out)
+	}
+}
+
+func TestApplyRenewsACertificateInsideTheWindow(t *testing.T) {
+	dir := writeApplyMesh(t)
+	openApplyVault(t, dir, "core-1")
+	stubSigner(t)
+	setExpiry(t, time.Now().Add(10*24*time.Hour))
+	t.Setenv("MESHY_KNOWN_HOSTS", filepath.Join(dir, "known_hosts"))
+	nodes := useFakes(t, "core-1")
+
+	out, errOut, code := captureBoth(t, func() int { return run([]string{"apply", "--mesh", dir, "--node", "core-1"}) })
+	if code != 0 {
+		t.Fatalf("exit = %d, want 0: %s", code, errOut)
+	}
+	if !strings.Contains(out, "core-1: renewed, wrote") {
+		t.Errorf("the report does not name the renewal: %q", out)
+	}
+	if !strings.Contains(nodes["core-1"].read("/etc/nebula/meshy-homelab/core-1.crt"), "STUB CRT") {
+		t.Error("a renewed certificate did not reach the node")
+	}
+}
+
+func TestApplyLeavesACertificateOutsideTheWindow(t *testing.T) {
+	dir := writeApplyMesh(t)
+	openApplyVault(t, dir, "core-1")
+	stubSigner(t)
+	setExpiry(t, time.Now().Add(300*24*time.Hour))
+	t.Setenv("MESHY_KNOWN_HOSTS", filepath.Join(dir, "known_hosts"))
+	nodes := useFakes(t, "core-1")
+
+	out, errOut, code := captureBoth(t, func() int { return run([]string{"apply", "--mesh", dir, "--node", "core-1"}) })
+	if code != 0 {
+		t.Fatalf("exit = %d, want 0: %s", code, errOut)
+	}
+	if strings.Contains(out, "renewed") {
+		t.Errorf("the report names a renewal that was not due: %q", out)
+	}
+	if got := nodes["core-1"].read("/etc/nebula/meshy-homelab/core-1.crt"); got != "core-1 certificate\n" {
+		t.Errorf("the node holds %q, want the certificate from the vault", got)
+	}
+}
+
+func TestApplyRevokesANodeThatLeftTheMesh(t *testing.T) {
+	dir := writeApplyMesh(t)
+	openApplyVault(t, dir, "core-1", "web-1", "old-1")
+	stubSigner(t)
+	t.Setenv("MESHY_KNOWN_HOSTS", filepath.Join(dir, "known_hosts"))
+	nodes := useFakes(t, "core-1", "web-1")
+
+	out, errOut, code := captureBoth(t, func() int { return run([]string{"apply", "--mesh", dir}) })
+	if code != 0 {
+		t.Fatalf("exit = %d, want 0: %s", code, errOut)
+	}
+	if !strings.Contains(out, "revoked old-1 (4f3a)") {
+		t.Errorf("the report does not name the revocation: %q", out)
+	}
+	for _, name := range []string{"core-1", "web-1"} {
+		body := nodes[name].read("/etc/nebula/meshy-homelab/blocklist.txt")
+		if !strings.Contains(body, "4f3a") {
+			t.Errorf("%s holds the blocklist %q, want the fingerprint", name, body)
+		}
+	}
+
+	record, err := vault.Read(filepath.Join(dir, vault.DirName))
+	if err != nil {
+		t.Fatalf("read the vault: %v", err)
+	}
+	if _, _, found := vault.Certificate(record, "old-1"); found {
+		t.Error("the vault still holds the certificate of the revoked node")
+	}
+	if _, _, found := vault.Certificate(record, "core-1"); !found {
+		t.Error("the run removed a node that the mesh still names")
+	}
+}
+
+func TestApplyKeepsTheVaultWhenANodeFails(t *testing.T) {
+	dir := writeApplyMesh(t)
+	openApplyVault(t, dir, "core-1", "web-1", "old-1")
+	stubSigner(t)
+	t.Setenv("MESHY_KNOWN_HOSTS", filepath.Join(dir, "known_hosts"))
+	nodes := useFakes(t, "core-1", "web-1")
+	nodes["core-1"].failAll = true
+
+	_, _, code := captureBoth(t, func() int { return run([]string{"apply", "--mesh", dir}) })
+	if code != 1 {
+		t.Errorf("exit = %d, want 1", code)
+	}
+
+	record, err := vault.Read(filepath.Join(dir, vault.DirName))
+	if err != nil {
+		t.Fatalf("read the vault: %v", err)
+	}
+	if _, _, found := vault.Certificate(record, "old-1"); !found {
+		t.Error("the vault dropped the certificate before every node took the blocklist")
+	}
+}
+
+func TestApplySecondRunWritesNothing(t *testing.T) {
+	dir := writeApplyMesh(t)
+	openApplyVault(t, dir, "core-1")
+	stubSigner(t)
+	t.Setenv("MESHY_KNOWN_HOSTS", filepath.Join(dir, "known_hosts"))
+	nodes := useFakes(t, "core-1")
+
+	if _, _, code := captureBoth(t, func() int { return run([]string{"apply", "--mesh", dir, "--node", "core-1"}) }); code != 0 {
+		t.Fatalf("first run exit = %d, want 0", code)
+	}
+	before := nodes["core-1"].writes
+
+	out, errOut, code := captureBoth(t, func() int { return run([]string{"apply", "--mesh", dir, "--node", "core-1"}) })
+	if code != 0 {
+		t.Fatalf("second run exit = %d, want 0: %s", code, errOut)
+	}
+	if out != "core-1: unchanged\n" {
+		t.Errorf("stdout = %q, want the unchanged line", out)
+	}
+	if nodes["core-1"].writes != before {
+		t.Errorf("the second run wrote %d files, want none", nodes["core-1"].writes-before)
+	}
+}
+
+func TestApplyDryRunPrintsThePlanAndWritesNothing(t *testing.T) {
+	dir := writeApplyMesh(t)
+	openApplyVault(t, dir, "core-1")
+	stubSigner(t)
+	nodes := useFakes(t, "core-1")
+
+	// The plan needs a host key, so the run stops with the message that plan
+	// writes. That message proves that apply handed the run to plan.
+	out, errOut, code := captureBoth(t, func() int { return run([]string{"apply", "--mesh", dir, "--dry-run"}) })
+	if code != 2 {
+		t.Errorf("exit = %d, want 2", code)
+	}
+	if !strings.Contains(errOut, "meshy plan:") {
+		t.Errorf("the run did not hand the dry run to plan: %q", errOut)
 	}
 	if out != "" {
 		t.Errorf("stdout = %q, want nothing", out)
 	}
-}
-
-func TestReportOneNamesTheFilesAndTheReload(t *testing.T) {
-	mesh := config.Mesh{Name: "homelab"}
-	target := config.Node{Name: "core-1"}
-
-	out, _, _ := captureBoth(t, func() int {
-		reportOne(target, mesh, apply.Result{Writes: []string{"config.yml", "core-1.crt"}, Action: apply.ActionReload})
-		return 0
-	})
-	want := "core-1: wrote config.yml core-1.crt\ncore-1: reloaded nebula@meshy-homelab\n"
-	if out != want {
-		t.Errorf("stdout = %q, want %q", out, want)
+	if len(nodes["core-1"].log) != 0 {
+		t.Errorf("the dry run sent %d commands to a node", len(nodes["core-1"].log))
 	}
 }
 
-func TestReportOneSaysStartedWhenTheUnitWasNotRunning(t *testing.T) {
-	mesh := config.Mesh{Name: "homelab"}
-	target := config.Node{Name: "core-1"}
+func TestApplyPrintsTheReportAsJSON(t *testing.T) {
+	dir := writeApplyMesh(t)
+	openApplyVault(t, dir, "core-1", "web-1")
+	stubSigner(t)
+	t.Setenv("MESHY_KNOWN_HOSTS", filepath.Join(dir, "known_hosts"))
+	useFakes(t, "core-1", "web-1")
 
-	out, _, _ := captureBoth(t, func() int {
-		reportOne(target, mesh, apply.Result{Writes: []string{"config.yml"}, Action: apply.ActionRestart})
-		return 0
-	})
-	want := "core-1: wrote config.yml\ncore-1: started nebula@meshy-homelab\n"
-	if out != want {
-		t.Errorf("stdout = %q, want %q", out, want)
+	out, errOut, code := captureBoth(t, func() int { return run([]string{"apply", "--mesh", dir, "--json"}) })
+	if code != 0 {
+		t.Fatalf("exit = %d, want 0: %s", code, errOut)
 	}
-}
 
-func TestReportOneSaysUnchangedWhenNothingWasWritten(t *testing.T) {
-	mesh := config.Mesh{Name: "homelab"}
-	target := config.Node{Name: "core-1"}
-
-	out, _, _ := captureBoth(t, func() int {
-		reportOne(target, mesh, apply.Result{})
-		return 0
-	})
-	if out != "core-1: unchanged\n" {
-		t.Errorf("stdout = %q", out)
+	var report apply.Report
+	if err := json.Unmarshal([]byte(out), &report); err != nil {
+		t.Fatalf("the report is not JSON: %v\n%s", err, out)
+	}
+	if report.Mesh != "homelab" {
+		t.Errorf("mesh = %q, want homelab", report.Mesh)
+	}
+	if len(report.Nodes) != 2 {
+		t.Fatalf("the report holds %d nodes, want 2", len(report.Nodes))
+	}
+	if report.Nodes[0].Name != "core-1" || report.Nodes[1].Name != "web-1" {
+		t.Errorf("the report names %v", report.Nodes)
+	}
+	if report.Nodes[0].Action != apply.ActionReload {
+		t.Errorf("action = %q, want reload", report.Nodes[0].Action)
+	}
+	for _, n := range report.Nodes {
+		if len(n.Writes) == 0 {
+			t.Errorf("%s reports no write", n.Name)
+		}
 	}
 }

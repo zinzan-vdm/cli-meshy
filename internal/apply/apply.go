@@ -29,6 +29,7 @@ type Files struct {
 	Authority []byte
 	Cert      []byte
 	Key       []byte
+	Blocklist []byte
 }
 
 // Result is what one run changed on one node.
@@ -36,6 +37,42 @@ type Result struct {
 	Writes []string
 	Action Action
 }
+
+// Report is what a run did to every node. A workflow parses it, so the field
+// names are the schema.
+type Report struct {
+	Mesh    string       `json:"mesh"`
+	Revoked []Revocation `json:"revoked,omitempty"`
+	Nodes   []NodeReport `json:"nodes"`
+	Failed  int          `json:"failed"`
+}
+
+// Revocation is one certificate that the run blocked on every node.
+type Revocation struct {
+	Name        string `json:"name"`
+	Fingerprint string `json:"fingerprint"`
+}
+
+// NodeReport is what a run did to one node. Error is set when the node failed,
+// and the run continued with the next node.
+type NodeReport struct {
+	Name    string   `json:"name"`
+	Renewed bool     `json:"renewed,omitempty"`
+	Writes  []string `json:"writes,omitempty"`
+	Action  Action   `json:"action,omitempty"`
+	Error   string   `json:"error,omitempty"`
+}
+
+// Add records the result of one node and counts a failure.
+func (r *Report) Add(n NodeReport) {
+	r.Nodes = append(r.Nodes, n)
+	if n.Error != "" {
+		r.Failed++
+	}
+}
+
+// Clean reports that every node matches the mesh file.
+func (r Report) Clean() bool { return r.Failed == 0 }
 
 // Action is what a run did to the unit after the writes.
 type Action string
@@ -49,7 +86,7 @@ const (
 // Run makes one node hold the files of the mesh. It writes only a file that
 // differs, and it refreshes the unit once, after the last write.
 func Run(ctx context.Context, m config.Mesh, n config.Node, f Files, s Session) (Result, error) {
-	if err := checkUnit(ctx, m, n, s); err != nil {
+	if err := Unit(ctx, m, n, s); err != nil {
 		return Result{}, err
 	}
 
@@ -123,7 +160,9 @@ func replace(ctx context.Context, s Session, path string, body []byte, mode fs.F
 	return true, nil
 }
 
-func checkUnit(ctx context.Context, m config.Mesh, n config.Node, s Session) error {
+// Unit reports a node that has no unit for the mesh. Run checks the unit before
+// it writes, so a host that was never prepared is named for what it needs.
+func Unit(ctx context.Context, m config.Mesh, n config.Node, s Session) error {
 	res, err := runCommand(ctx, s, unitCommand(m.Name))
 	if err != nil {
 		return fmt.Errorf("node %s: %w", n.Name, err)
@@ -191,9 +230,11 @@ type file struct {
 	body []byte
 }
 
-// list returns the files of one node in the order the node takes them.
+// list returns the files of one node in the order the node takes them. The
+// blocklist comes first, so the file that the config names is never absent.
 func (f Files) list(n config.Node) []file {
 	return []file{
+		{name: "blocklist.txt", mode: 0o644, body: f.Blocklist},
 		{name: "config.yml", mode: 0o600, body: f.Config},
 		{name: "ca.crt", mode: 0o644, body: f.Authority},
 		{name: n.Name + ".crt", mode: 0o644, body: f.Cert},

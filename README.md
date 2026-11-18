@@ -2,7 +2,7 @@
 
 `meshy` builds and maintains private overlay networks on top of Nebula. One git repository describes one mesh. A pull request plans the change, a merge applies it, and a GitHub Actions runner does the work. `meshy` also runs locally with the same code path.
 
-Status: pre-alpha. `init`, `validate`, `plan`, `ca init`, `issue`, `bootstrap`, `install`, `unlock`, `lock`, and `apply --node` work.
+Status: pre-alpha. `init`, `validate`, `plan`, `ca init`, `issue`, `bootstrap`, `install`, `unlock`, `lock`, and `apply` work.
 
 ## What it does
 
@@ -100,21 +100,25 @@ A node that already reports the pin is left alone. A node that fails is reported
 
 The binary reaches the node as the node user, and one command places it as root. That command names its source, its destination, its owner, and its mode, so the node user cannot place another file. The rules are in [docs/patterns/0012](docs/patterns/0012-the-release-is-verified-before-a-node-sees-it.md) and [0013](docs/patterns/0013-the-node-places-the-binary-through-one-exact-rule.md).
 
-### Apply the config to one node
+### Make every node match the mesh
 
-`apply` writes the config, the certificate, the authority certificate, and the key to one node, then reloads the unit one time:
+`apply` runs over every server node unless `--node` names one. For each node it signs a missing certificate and renews one inside `certificates.renew_before`. It then writes the files that differ and refreshes the unit one time:
 
 ```sh
 meshy unlock
-meshy issue web-1
+meshy apply
 meshy apply --node web-1
 ```
 
-The vault must be open, and it must hold a certificate for the node. A missing certificate stops the run with a message that names `meshy issue`. A missing unit stops the run with a message that names `meshy bootstrap`.
+The vault must be open. A missing unit stops that node with a message that names `meshy bootstrap`, and the run continues with the next node.
+
+A certificate that the mesh file no longer names is blocked. The run adds its fingerprint to the blocklist of every node, then deletes the certificate and the key from the vault. The fingerprint stays in the vault, so a node that returns is still blocked. These rules are in [docs/patterns/0014](docs/patterns/0014-a-block-outlives-the-certificate.md) and [0015](docs/patterns/0015-the-blocklist-is-a-file-the-config-names.md).
 
 `apply` writes a file only when the content differs. A second run changes nothing and does not reload. Each file goes to a temporary name and a rename, so a failed write leaves the previous file in place.
 
-The exit code is 0 when the node matches or was updated. It is 1 when the node failed or the unit is missing. It is 2 when the run never started. `--node` is required, and this build writes one node per run.
+The exit code is 0 when every node matches or was updated. It is 1 when at least one node failed, and the run still reached the others. It is 2 when the run never started. `--dry-run` prints the plan and writes nothing. `--json` prints the report, one entry for each node.
+
+`apply` needs the pinned `nebula-cert`, because it signs and renews. It finds the tool in `.meshy/bin/<version>/` or on `PATH`.
 
 The write runs as the node user and needs no sudo. Only the unit command uses `sudo`: a reload when the unit runs, and a restart when it does not. The rules are in [docs/patterns/0009](docs/patterns/0009-a-write-to-a-node-replaces-the-file-by-rename.md), [0010](docs/patterns/0010-the-unit-reloads-once-after-the-last-write.md), and [0011](docs/patterns/0011-a-stopped-unit-is-started-not-reloaded.md).
 
@@ -128,7 +132,7 @@ The write runs as the node user and needs no sudo. Only the unit command uses `s
 | `unlock`, `lock` | works |
 | `issue` | works |
 | `plan` | works |
-| `apply` | works for one node |
+| `apply` | works |
 | `install` | works |
 | `bundle` | planned |
 | `bootstrap` | works |

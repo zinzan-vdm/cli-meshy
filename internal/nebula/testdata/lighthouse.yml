@@ -2,6 +2,7 @@ pki:
   ca: /etc/nebula/meshy-homelab/ca.crt
   cert: /etc/nebula/meshy-homelab/core-1.crt
   key: /etc/nebula/meshy-homelab/core-1.key
+  blocklist: /etc/nebula/meshy-homelab/blocklist.txt
   disconnect_invalid: true
 lighthouse:
   am_lighthouse: true

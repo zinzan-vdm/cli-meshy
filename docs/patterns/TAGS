@@ -1,5 +1,6 @@
 apply
 binaries
+certificates
 ci
 code
 comments
@@ -8,6 +9,7 @@ keys
 licence
 nebula
 rendering
+revocation
 ssh
 systemd
 tests
