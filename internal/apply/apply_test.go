@@ -2,153 +2,14 @@ package apply
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
-	"errors"
 	"io/fs"
-	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/zinzan-vdm/cli-meshy/internal/config"
 	"github.com/zinzan-vdm/cli-meshy/internal/node"
+	"github.com/zinzan-vdm/cli-meshy/internal/sshx/sshtest"
 )
-
-type fakeFile struct {
-	body []byte
-	mode fs.FileMode
-}
-
-// fakeNode is one node with a filesystem in memory. It answers the commands
-// that Run builds, so it cannot drift from the commands that Run sends.
-type fakeNode struct {
-	files     map[string]fakeFile
-	noUnit    bool
-	inactive  bool
-	staysDown bool
-	renameErr bool
-	reloadErr bool
-	staleHash bool
-	writeErr  map[string]error
-	readErr   map[string]error
-	log       []string
-	reloads   int
-	restarts  int
-}
-
-func newFake() *fakeNode {
-	return &fakeNode{files: map[string]fakeFile{}}
-}
-
-func (f *fakeNode) Run(_ context.Context, cmd string) (node.Result, error) {
-	switch {
-	case cmd == unitCommand("homelab"):
-		f.log = append(f.log, "cat")
-		if f.noUnit {
-			return node.Result{ExitCode: 1, Stderr: "No files found for nebula@meshy-homelab.service."}, nil
-		}
-		return node.Result{}, nil
-	case cmd == restartCommand("homelab"):
-		f.log = append(f.log, "restart")
-		f.restarts++
-		if f.reloadErr {
-			return node.Result{ExitCode: 1, Stderr: "Job for nebula@meshy-homelab.service failed."}, nil
-		}
-		if !f.staysDown {
-			f.inactive = false
-		}
-		return node.Result{}, nil
-	case cmd == reloadCommand("homelab"):
-		f.log = append(f.log, "reload")
-		f.reloads++
-		if f.reloadErr {
-			return node.Result{ExitCode: 1, Stderr: "Job for nebula@meshy-homelab.service failed."}, nil
-		}
-		return node.Result{}, nil
-	case strings.HasPrefix(cmd, "mv -f "):
-		from, to := movePaths(cmd)
-		f.log = append(f.log, "rename "+from+" "+to)
-		if f.renameErr {
-			return node.Result{ExitCode: 1, Stderr: "Permission denied"}, nil
-		}
-		file, ok := f.files[from]
-		if !ok {
-			return node.Result{ExitCode: 1, Stderr: "No such file or directory"}, nil
-		}
-		delete(f.files, from)
-		f.files[to] = file
-		return node.Result{}, nil
-	case strings.HasPrefix(cmd, "sha256sum "):
-		path := unquote(strings.TrimPrefix(cmd, "sha256sum "))
-		f.log = append(f.log, "hash "+path)
-		file, ok := f.files[path]
-		if !ok {
-			return node.Result{ExitCode: 1, Stderr: "No such file or directory"}, nil
-		}
-		if f.staleHash {
-			file.body = []byte("what the node served before the write\n")
-		}
-		sum := sha256.Sum256(file.body)
-		return node.Result{Stdout: hex.EncodeToString(sum[:]) + "  " + path + "\n"}, nil
-	case cmd == activeCommand("homelab"):
-		f.log = append(f.log, "active")
-		if f.inactive {
-			return node.Result{Stdout: "inactive\n", ExitCode: 3}, nil
-		}
-		return node.Result{Stdout: "active\n"}, nil
-	}
-	return node.Result{ExitCode: 127, Stderr: "command not found: " + cmd}, nil
-}
-
-func (f *fakeNode) Write(_ context.Context, path string, data []byte, mode fs.FileMode) error {
-	f.log = append(f.log, "write "+path)
-	if err, ok := f.writeErr[path]; ok {
-		return err
-	}
-	f.files[path] = fakeFile{body: append([]byte(nil), data...), mode: mode}
-	return nil
-}
-
-func (f *fakeNode) Read(_ context.Context, path string) ([]byte, error) {
-	f.log = append(f.log, "read "+path)
-	if err, ok := f.readErr[path]; ok {
-		return nil, err
-	}
-	file, ok := f.files[path]
-	if !ok {
-		return nil, node.ErrNoFile
-	}
-	return file.body, nil
-}
-
-func (f *fakeNode) indexOf(op string) int {
-	for i, entry := range f.log {
-		if entry == op {
-			return i
-		}
-	}
-	return -1
-}
-
-func (f *fakeNode) lastRename() int {
-	last := -1
-	for i, entry := range f.log {
-		if strings.HasPrefix(entry, "rename ") {
-			last = i
-		}
-	}
-	return last
-}
-
-func movePaths(cmd string) (string, string) {
-	parts := strings.Split(strings.TrimPrefix(cmd, "mv -f "), "' '")
-	if len(parts) != 2 {
-		return "", ""
-	}
-	return unquote(parts[0]), unquote(parts[1])
-}
-
-func unquote(s string) string { return strings.Trim(s, "'") }
 
 func testMesh() (config.Mesh, config.Node) {
 	n := config.Node{
@@ -163,6 +24,7 @@ func testMesh() (config.Mesh, config.Node) {
 
 func testFiles() Files {
 	return Files{
+		Blocklist: []byte("aa11bb22\n"),
 		Config:    []byte("pki:\n  ca: /etc/nebula/meshy-homelab/ca.crt\n"),
 		Authority: []byte("authority certificate\n"),
 		Cert:      []byte("node certificate\n"),
@@ -170,11 +32,71 @@ func testFiles() Files {
 	}
 }
 
+// opsAfter returns the operations of one kind that the node did after seq.
+func opsAfter(s *sshtest.Server, seq int, kind string) []sshtest.Op {
+	var out []sshtest.Op
+	for _, op := range s.Ops() {
+		if op.Seq > seq && op.Kind == kind {
+			out = append(out, op)
+		}
+	}
+	return out
+}
+
+// cmdsAfter returns the commands that the node ran after seq.
+func cmdsAfter(s *sshtest.Server, seq int) []string {
+	var out []string
+	for _, c := range s.Commands() {
+		if c.Seq > seq {
+			out = append(out, c.Text)
+		}
+	}
+	return out
+}
+
+func commandSeq(s *sshtest.Server, text string) int {
+	for _, c := range s.Commands() {
+		if c.Text == text {
+			return c.Seq
+		}
+	}
+	return -1
+}
+
+func countCommand(s *sshtest.Server, text string) int {
+	n := 0
+	for _, c := range s.Commands() {
+		if c.Text == text {
+			n++
+		}
+	}
+	return n
+}
+
+func lastRenameSeq(s *sshtest.Server) int {
+	last := -1
+	for _, op := range s.Ops() {
+		if op.Kind == sshtest.OpRename {
+			last = op.Seq
+		}
+	}
+	return last
+}
+
+func renamed(s *sshtest.Server, from, to string) bool {
+	for _, op := range s.Ops() {
+		if op.Kind == sshtest.OpRename && op.Path == from && op.To == to {
+			return true
+		}
+	}
+	return false
+}
+
 func TestRunWritesEveryFileThroughATemporaryName(t *testing.T) {
 	m, n := testMesh()
-	f := newFake()
+	srv := sshtest.New(t)
 
-	res, err := Run(context.Background(), m, n, testFiles(), f)
+	res, err := Run(context.Background(), m, n, testFiles(), srv.Connect())
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -185,6 +107,7 @@ func TestRunWritesEveryFileThroughATemporaryName(t *testing.T) {
 	}
 
 	dir := node.Dir(m.Name)
+	written := opsAfter(srv, 0, sshtest.OpWrite)
 	for name, mode := range map[string]fs.FileMode{
 		"blocklist.txt": 0o644,
 		"config.yml":    0o600,
@@ -192,31 +115,37 @@ func TestRunWritesEveryFileThroughATemporaryName(t *testing.T) {
 		"core-1.crt":    0o644,
 		"core-1.key":    0o600,
 	} {
-		path := filepath.Join(dir, name)
-		file, ok := f.files[path]
+		path := dir + "/" + name
+		f, ok := srv.File(path)
 		if !ok {
 			t.Fatalf("%s is not on the node", path)
 		}
-		if file.mode != mode {
-			t.Errorf("%s mode = %o, want %o", name, file.mode, mode)
+		if f.Mode != mode {
+			t.Errorf("%s mode = %o, want %o", name, f.Mode, mode)
 		}
-		if f.indexOf("write "+path+".tmp") < 0 {
+		wrote := false
+		for _, op := range written {
+			if op.Path == path+".tmp" {
+				wrote = true
+			}
+		}
+		if !wrote {
 			t.Errorf("%s was not written through a temporary name", name)
 		}
-		if f.indexOf("rename "+path+".tmp "+path) < 0 {
+		if !renamed(srv, path+".tmp", path) {
 			t.Errorf("%s was not renamed into place", name)
 		}
 	}
 
-	for path := range f.files {
+	for _, path := range srv.Paths() {
 		if strings.HasSuffix(path, ".tmp") {
 			t.Errorf("%s was left behind", path)
 		}
 	}
-	if f.reloads != 1 {
-		t.Errorf("the unit reloaded %d times, want 1", f.reloads)
+	if got := countCommand(srv, reloadCommand(m.Name)); got != 1 {
+		t.Errorf("the unit reloaded %d times, want 1", got)
 	}
-	if f.indexOf("reload") < f.lastRename() {
+	if commandSeq(srv, reloadCommand(m.Name)) < lastRenameSeq(srv) {
 		t.Error("the unit reloaded before the last write")
 	}
 	if res.Action != ActionReload {
@@ -226,166 +155,173 @@ func TestRunWritesEveryFileThroughATemporaryName(t *testing.T) {
 
 func TestRunReadsTheHashAndTheUnitBackAfterTheReload(t *testing.T) {
 	m, n := testMesh()
-	f := newFake()
+	srv := sshtest.New(t)
 
-	if _, err := Run(context.Background(), m, n, testFiles(), f); err != nil {
+	if _, err := Run(context.Background(), m, n, testFiles(), srv.Connect()); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 
-	last := f.log[len(f.log)-2:]
-	if last[0] != "hash "+node.Dir(m.Name)+"/config.yml" {
+	cmds := srv.Commands()
+	last := cmds[len(cmds)-2:]
+	if last[0].Text != hashCommand(node.Dir(m.Name)+"/config.yml") {
 		t.Errorf("the run did not read the config hash back: %v", last)
 	}
-	if last[1] != "active" {
+	if last[1].Text != activeCommand(m.Name) {
 		t.Errorf("the run did not read the unit state back: %v", last)
 	}
 }
 
 func TestRunWritesNothingWhenTheNodeMatches(t *testing.T) {
 	m, n := testMesh()
-	f := newFake()
+	srv := sshtest.New(t)
+	c := srv.Connect()
 
-	if _, err := Run(context.Background(), m, n, testFiles(), f); err != nil {
+	if _, err := Run(context.Background(), m, n, testFiles(), c); err != nil {
 		t.Fatalf("the first Run failed: %v", err)
 	}
 
-	f.log = nil
-	f.reloads = 0
-	res, err := Run(context.Background(), m, n, testFiles(), f)
+	mark := srv.Seq()
+	res, err := Run(context.Background(), m, n, testFiles(), c)
 	if err != nil {
 		t.Fatalf("the second Run failed: %v", err)
 	}
 	if len(res.Writes) != 0 || res.Action != ActionNone {
 		t.Errorf("the second run reported %v, action %q", res.Writes, res.Action)
 	}
-	if f.reloads != 0 {
-		t.Errorf("the unit reloaded %d times with no write", f.reloads)
+	if ops := opsAfter(srv, mark, sshtest.OpWrite); len(ops) != 0 {
+		t.Errorf("the second run wrote %v", ops)
 	}
-	for _, op := range f.log {
-		if strings.HasPrefix(op, "write ") || strings.HasPrefix(op, "rename ") {
-			t.Errorf("the second run touched the node: %s", op)
+	if ops := opsAfter(srv, mark, sshtest.OpRename); len(ops) != 0 {
+		t.Errorf("the second run renamed %v", ops)
+	}
+	for _, cmd := range cmdsAfter(srv, mark) {
+		if cmd == reloadCommand(m.Name) || cmd == restartCommand(m.Name) {
+			t.Errorf("the second run refreshed the unit: %q", cmd)
 		}
 	}
 }
 
 func TestRunStartsAUnitThatIsNotRunning(t *testing.T) {
 	m, n := testMesh()
-	f := newFake()
-	f.inactive = true
+	srv := sshtest.New(t)
+	srv.StopUnit()
 
-	res, err := Run(context.Background(), m, n, testFiles(), f)
+	res, err := Run(context.Background(), m, n, testFiles(), srv.Connect())
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 
-	if f.restarts != 1 {
-		t.Errorf("the unit started %d times, want 1", f.restarts)
+	if got := countCommand(srv, restartCommand(m.Name)); got != 1 {
+		t.Errorf("the unit started %d times, want 1", got)
 	}
-	if f.reloads != 0 {
-		t.Errorf("the unit reloaded %d times, want 0", f.reloads)
+	if got := countCommand(srv, reloadCommand(m.Name)); got != 0 {
+		t.Errorf("the unit reloaded %d times, want 0", got)
 	}
 	if res.Action != ActionRestart {
 		t.Errorf("action = %q, want %q", res.Action, ActionRestart)
 	}
-	if f.indexOf("restart") < f.lastRename() {
+	if commandSeq(srv, restartCommand(m.Name)) < lastRenameSeq(srv) {
 		t.Error("the unit started before the last write")
 	}
 }
 
 func TestRunWritesOnlyTheFileThatDiffers(t *testing.T) {
 	m, n := testMesh()
-	f := newFake()
+	srv := sshtest.New(t)
+	c := srv.Connect()
 
-	if _, err := Run(context.Background(), m, n, testFiles(), f); err != nil {
+	if _, err := Run(context.Background(), m, n, testFiles(), c); err != nil {
 		t.Fatalf("the first Run failed: %v", err)
 	}
 
 	path := node.Dir(m.Name) + "/config.yml"
-	f.files[path] = fakeFile{body: []byte("pki: the old config\n"), mode: 0o600}
-	f.log = nil
-	f.reloads = 0
+	srv.Put(path, []byte("pki: the old config\n"), 0o600)
+	mark := srv.Seq()
 
-	res, err := Run(context.Background(), m, n, testFiles(), f)
+	res, err := Run(context.Background(), m, n, testFiles(), c)
 	if err != nil {
 		t.Fatalf("the second Run failed: %v", err)
 	}
 	if strings.Join(res.Writes, " ") != "config.yml" {
 		t.Errorf("writes = %v, want only config.yml", res.Writes)
 	}
-	if f.reloads != 1 {
-		t.Errorf("the unit reloaded %d times, want 1", f.reloads)
+	wrote := opsAfter(srv, mark, sshtest.OpWrite)
+	if len(wrote) != 1 || wrote[0].Path != path+".tmp" {
+		t.Errorf("the run wrote %v, want only %s", wrote, path+".tmp")
 	}
-	if string(f.files[path].body) != string(testFiles().Config) {
+	if got := countCommand(srv, reloadCommand(m.Name)); got != 2 {
+		t.Errorf("the unit reloaded %d times, want one per run", got)
+	}
+	if f, ok := srv.File(path); !ok || string(f.Body) != string(testFiles().Config) {
 		t.Error("the node does not hold the rendered config")
 	}
 }
 
 func TestRunNamesBootstrapWhenTheUnitIsMissing(t *testing.T) {
 	m, n := testMesh()
-	f := newFake()
-	f.noUnit = true
+	srv := sshtest.New(t)
+	srv.FailCommand(unitCommand(m.Name), 1, "No files found for "+unitName(m.Name)+".")
 
-	_, err := Run(context.Background(), m, n, testFiles(), f)
+	_, err := Run(context.Background(), m, n, testFiles(), srv.Connect())
 	if err == nil {
 		t.Fatal("Run succeeded with no unit on the node")
 	}
 	if !strings.Contains(err.Error(), "run meshy bootstrap core-1") {
 		t.Errorf("the error does not name the bootstrap command: %v", err)
 	}
-	for _, op := range f.log {
-		if strings.HasPrefix(op, "write ") {
-			t.Errorf("the run wrote to a node with no unit: %s", op)
-		}
+	if ops := opsAfter(srv, 0, sshtest.OpWrite); len(ops) != 0 {
+		t.Errorf("the run wrote to a node with no unit: %v", ops)
 	}
 }
 
 func TestRunLeavesTheOldConfigWhenTheRenameFails(t *testing.T) {
 	m, n := testMesh()
-	f := newFake()
+	srv := sshtest.New(t)
 
 	path := node.Dir(m.Name) + "/config.yml"
-	f.files[path] = fakeFile{body: []byte("pki: the old config\n"), mode: 0o600}
-	f.renameErr = true
+	srv.Put(path, []byte("pki: the old config\n"), 0o600)
+	srv.FailCommand(moveCommand(path+".tmp", path), 1, "Permission denied")
 
-	_, err := Run(context.Background(), m, n, testFiles(), f)
+	_, err := Run(context.Background(), m, n, testFiles(), srv.Connect())
 	if err == nil {
 		t.Fatal("Run succeeded although the rename failed")
 	}
-	if string(f.files[path].body) != "pki: the old config\n" {
-		t.Errorf("the failed rename changed the config: %q", f.files[path].body)
+	f, ok := srv.File(path)
+	if !ok || string(f.Body) != "pki: the old config\n" {
+		t.Errorf("the failed rename changed the config: %q", f.Body)
 	}
-	if f.reloads != 0 {
+	if got := countCommand(srv, reloadCommand(m.Name)); got != 0 {
 		t.Error("the unit reloaded after a failed rename")
 	}
 }
 
 func TestRunStopsWhenTheWriteFails(t *testing.T) {
 	m, n := testMesh()
-	f := newFake()
+	srv := sshtest.New(t)
 	temp := node.Dir(m.Name) + "/config.yml.tmp"
-	f.writeErr = map[string]error{temp: errors.New("no space left on device")}
+	srv.FailWrite(temp, "no space left on device")
 
-	_, err := Run(context.Background(), m, n, testFiles(), f)
+	_, err := Run(context.Background(), m, n, testFiles(), srv.Connect())
 	if err == nil {
 		t.Fatal("Run succeeded although the write failed")
 	}
 	if !strings.Contains(err.Error(), "no space left on device") {
 		t.Errorf("the error does not name the reason: %v", err)
 	}
-	if f.indexOf("rename "+temp+" "+strings.TrimSuffix(temp, ".tmp")) >= 0 {
+	if renamed(srv, temp, strings.TrimSuffix(temp, ".tmp")) {
 		t.Error("the run renamed a file that it could not write")
 	}
-	if f.reloads != 0 {
+	if got := countCommand(srv, reloadCommand(m.Name)); got != 0 {
 		t.Error("the unit reloaded after a failed write")
 	}
 }
 
 func TestRunNamesTheUnitWhenTheReloadFails(t *testing.T) {
 	m, n := testMesh()
-	f := newFake()
-	f.reloadErr = true
+	srv := sshtest.New(t)
+	srv.FailCommand(reloadCommand(m.Name), 1, "Job for "+unitName(m.Name)+" failed.")
 
-	res, err := Run(context.Background(), m, n, testFiles(), f)
+	res, err := Run(context.Background(), m, n, testFiles(), srv.Connect())
 	if err == nil {
 		t.Fatal("Run succeeded although the reload failed")
 	}
@@ -395,17 +331,20 @@ func TestRunNamesTheUnitWhenTheReloadFails(t *testing.T) {
 	if len(res.Writes) != 5 {
 		t.Errorf("writes = %v, want the five files that reached the node", res.Writes)
 	}
-	if _, ok := f.files[node.Dir(m.Name)+"/config.yml"]; !ok {
+	if _, ok := srv.File(node.Dir(m.Name) + "/config.yml"); !ok {
 		t.Error("the written config left the node")
 	}
 }
 
 func TestRunReportsAWriteThatTheNodeDidNotKeep(t *testing.T) {
 	m, n := testMesh()
-	f := newFake()
-	f.staleHash = true
+	srv := sshtest.New(t)
 
-	_, err := Run(context.Background(), m, n, testFiles(), f)
+	path := node.Dir(m.Name) + "/config.yml"
+	srv.Put(path, []byte("pki: the old config\n"), 0o600)
+	srv.KeepRename(path)
+
+	_, err := Run(context.Background(), m, n, testFiles(), srv.Connect())
 	if err == nil {
 		t.Fatal("Run succeeded although the node kept the old config")
 	}
@@ -416,11 +355,11 @@ func TestRunReportsAWriteThatTheNodeDidNotKeep(t *testing.T) {
 
 func TestRunReportsAUnitThatIsNotActive(t *testing.T) {
 	m, n := testMesh()
-	f := newFake()
-	f.inactive = true
-	f.staysDown = true
+	srv := sshtest.New(t)
+	srv.StopUnit()
+	srv.LeaveUnitDown()
 
-	_, err := Run(context.Background(), m, n, testFiles(), f)
+	_, err := Run(context.Background(), m, n, testFiles(), srv.Connect())
 	if err == nil {
 		t.Fatal("Run succeeded although the unit is not active")
 	}
@@ -431,17 +370,17 @@ func TestRunReportsAUnitThatIsNotActive(t *testing.T) {
 
 func TestRunStopsWhenAFileCannotBeRead(t *testing.T) {
 	m, n := testMesh()
-	f := newFake()
-	f.readErr = map[string]error{node.Dir(m.Name) + "/config.yml": errors.New("permission denied")}
+	srv := sshtest.New(t)
+	srv.FailRead(node.Dir(m.Name)+"/config.yml", "permission denied")
 
-	_, err := Run(context.Background(), m, n, testFiles(), f)
+	_, err := Run(context.Background(), m, n, testFiles(), srv.Connect())
 	if err == nil {
 		t.Fatal("Run succeeded although the config could not be read")
 	}
 	if !strings.Contains(err.Error(), "permission denied") {
 		t.Errorf("the error does not name the reason: %v", err)
 	}
-	if f.reloads != 0 {
+	if got := countCommand(srv, reloadCommand(m.Name)); got != 0 {
 		t.Error("the unit reloaded after a failed read")
 	}
 }

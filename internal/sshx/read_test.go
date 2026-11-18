@@ -17,6 +17,7 @@ import (
 
 	"github.com/zinzan-vdm/cli-meshy/internal/config"
 	"github.com/zinzan-vdm/cli-meshy/internal/node"
+	"github.com/zinzan-vdm/cli-meshy/internal/sshx/sshtest"
 )
 
 // server is a local SSH server that answers the read commands.
@@ -236,5 +237,25 @@ func TestDialFailsOnAnUnknownHostKey(t *testing.T) {
 	}
 	if _, err := Dial(cfg); err == nil {
 		t.Fatal("Dial accepted a host key that does not match")
+	}
+}
+
+func TestReadNamesAMissingCertificate(t *testing.T) {
+	m := config.Mesh{
+		Name:      "homelab",
+		Interface: "meshy0",
+		Nodes: []config.Node{
+			{Name: "core-1", Kind: config.KindServer, IP: "10.42.0.1"},
+		},
+	}
+	srv := sshtest.New(t, sshtest.WithVersion("1.12.0"))
+
+	_, err := node.Read(context.Background(), m, m.Nodes[0], srv.Connect())
+	if err == nil {
+		t.Fatal("Read succeeded on a node with no certificate")
+	}
+	want := "no certificate at " + node.Dir(m.Name) + "/core-1.crt"
+	if !strings.Contains(err.Error(), want) {
+		t.Errorf("the error does not say the certificate is absent: %v", err)
 	}
 }
