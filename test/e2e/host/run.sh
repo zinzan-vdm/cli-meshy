@@ -100,7 +100,11 @@ bootstrap_node() {
 
 	on "root@$host" 'install -d -m 0700 -o meshy -g meshy /home/meshy/.ssh && install -m 0600 -o meshy -g meshy /run/keys/authorized_keys /home/meshy/.ssh/authorized_keys'
 
-	on "meshy@$host" true || fail "the node user cannot run a command on $host"
+	if ! on "meshy@$host" true; then
+		printf 'note: the account of the node user is %s\n' "$(on "root@$host" 'grep "^meshy:" /etc/passwd' || true)"
+		on "root@$host" 'ls -ld /home/meshy /home/meshy/.ssh /home/meshy/.ssh/authorized_keys' || true
+		fail "the node user cannot run a command on $host"
+	fi
 }
 
 install_node() {

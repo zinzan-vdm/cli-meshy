@@ -15,7 +15,8 @@ install -m 0600 /run/keys/authorized_keys /root/.ssh/authorized_keys
 # connects.
 ssh-keygen -q -A
 
-# -e sends the log to the container log, so a refused key explains itself.
-/usr/sbin/sshd -e
+# -D -e keeps the daemon in the foreground and sends its log to the container
+# log, so a refused key explains itself.
+/usr/sbin/sshd -D -e &
 
 exec /usr/local/bin/supervise
