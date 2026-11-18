@@ -54,7 +54,7 @@ go run ./cmd/meshy validate --mesh ./homelab
 
 `validate` returns a non-zero exit code and one line per problem. The workflow that `init` writes runs it on every pull request.
 
-The same workflow runs `plan` on a pull request from the repository and puts the JSON in the run summary. The plan needs two repository secrets. [docs/conf/0002-the-mesh-workflow.md](docs/conf/0002-the-mesh-workflow.md) names them and states what a maintainer must set.
+The same workflow runs `plan` on a pull request from the repository and puts the JSON in the run summary. A merge to `main` runs `unlock`, `apply`, and `lock`. A weekly run applies only when the plan reports drift or a renewal. The plan needs two repository secrets, and the apply job also needs three shares. [docs/conf/0002-the-mesh-workflow.md](docs/conf/0002-the-mesh-workflow.md) names them and states what a maintainer must set.
 
 The field reference is in [docs/conf/0001-mesh-yml.md](docs/conf/0001-mesh-yml.md).
 
