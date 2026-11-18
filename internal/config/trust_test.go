@@ -156,3 +156,110 @@ func TestAddTrustRefusesAFileWithoutATrustList(t *testing.T) {
 		t.Errorf("error does not name the list: %v", err)
 	}
 }
+
+func TestRemoveTrustChangesOneLineAndKeepsTheRest(t *testing.T) {
+	two := strings.Replace(trustMesh, "trust: [ca-1]", "trust: [ca-1, ca-2]", 1)
+	dir := writeMeshFile(t, two)
+
+	changed, err := RemoveTrust(dir, "ca-1")
+	if err != nil {
+		t.Fatalf("RemoveTrust: %v", err)
+	}
+	if !changed {
+		t.Fatal("RemoveTrust reported no change")
+	}
+
+	body, err := os.ReadFile(filepath.Join(dir, FileName))
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	want := strings.Replace(two, "trust: [ca-1, ca-2]  # the authority that signs", "trust: [ca-2]  # the authority that signs", 1)
+	if string(body) != want {
+		t.Errorf("the file changed by more than the trust list:\n%s", body)
+	}
+}
+
+func TestRemoveTrustLeavesAFileThatDoesNotNameTheAuthority(t *testing.T) {
+	dir := writeMeshFile(t, trustMesh)
+
+	changed, err := RemoveTrust(dir, "ca-2")
+	if err != nil {
+		t.Fatalf("RemoveTrust: %v", err)
+	}
+	if changed {
+		t.Error("RemoveTrust reported a change for a name that is not trusted")
+	}
+
+	body, err := os.ReadFile(filepath.Join(dir, FileName))
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if string(body) != trustMesh {
+		t.Errorf("the file changed:\n%s", body)
+	}
+}
+
+func TestRemoveTrustReadsABlockList(t *testing.T) {
+	dir := writeMeshFile(t, `schema: 1
+name: homelab
+ca:
+  duration: 20y
+  trust:
+    - ca-1
+    - ca-2
+  active: ca-2
+rules: []
+`)
+
+	if _, err := RemoveTrust(dir, "ca-1"); err != nil {
+		t.Fatalf("RemoveTrust: %v", err)
+	}
+
+	mesh, err := Load(dir)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if len(mesh.CA.Trust) != 1 || mesh.CA.Trust[0] != "ca-2" {
+		t.Errorf("trust = %v, want [ca-2]", mesh.CA.Trust)
+	}
+
+	body, err := os.ReadFile(filepath.Join(dir, FileName))
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	want := `  trust:
+    - ca-2
+  active: ca-2
+`
+	if !strings.Contains(string(body), want) {
+		t.Errorf("the block list is not in the form a person wrote:\n%s", body)
+	}
+}
+
+func TestRemoveTrustKeepsTheQuotesOfAList(t *testing.T) {
+	dir := writeMeshFile(t, "schema: 1\nname: homelab\nca:\n  trust: [\"ca-1\", \"ca-2\"]\n  active: ca-2\n")
+
+	if _, err := RemoveTrust(dir, "ca-1"); err != nil {
+		t.Fatalf("RemoveTrust: %v", err)
+	}
+
+	body, err := os.ReadFile(filepath.Join(dir, FileName))
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if !strings.Contains(string(body), `trust: ["ca-2"]`) {
+		t.Errorf("the edit dropped the quotes:\n%s", body)
+	}
+}
+
+func TestRemoveTrustRefusesAFileWithoutATrustList(t *testing.T) {
+	dir := writeMeshFile(t, "schema: 1\nname: homelab\nca:\n  duration: 20y\n")
+
+	_, err := RemoveTrust(dir, "ca-1")
+	if err == nil {
+		t.Fatal("RemoveTrust accepted a file with no ca.trust")
+	}
+	if !strings.Contains(err.Error(), "ca.trust") {
+		t.Errorf("error does not name the list: %v", err)
+	}
+}

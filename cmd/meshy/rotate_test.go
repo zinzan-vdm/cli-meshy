@@ -231,12 +231,12 @@ func TestCARotateRefusesAPhaseThatIsNotBuilt(t *testing.T) {
 	dir := writeApplyMesh(t)
 
 	stderr, code := captureErr(t, func() int {
-		return run([]string{"ca", "rotate", "--phase", "3", "--mesh", dir})
+		return run([]string{"ca", "rotate", "--phase", "4", "--mesh", dir})
 	})
 	if code != 2 {
 		t.Errorf("exit = %d, want 2", code)
 	}
-	if !strings.Contains(stderr, "phase 3") {
+	if !strings.Contains(stderr, "phase 4") {
 		t.Errorf("message = %q, want the phase", stderr)
 	}
 }
@@ -650,5 +650,170 @@ func TestSignerOfNamesTheAuthorityAndKeepsAnUnknownFingerprint(t *testing.T) {
 	}
 	if got := signerOf(signers, "bb22"); got != "bb22" {
 		t.Errorf("signerOf = %q, want the fingerprint that it cannot name", got)
+	}
+}
+
+// phase3Mesh is the state that phase 2 leaves behind: two trusted authorities,
+// ca-2 active, and a certificate on each node that the active authority signed.
+func phase3Mesh(t *testing.T, issuers map[string]string) (string, map[string]*fakeNode) {
+	t.Helper()
+
+	dir := rotatedMeshDir(t, "ca-2")
+	openRotateVault(t, dir, "core-1", "web-1")
+	stubSigner(t)
+	t.Setenv("MESHY_KNOWN_HOSTS", filepath.Join(dir, "known_hosts"))
+
+	nodes := useFakes(t, "core-1", "web-1")
+	for _, name := range []string{"core-1", "web-1"} {
+		rotateNode(nodes, name, "ca-1", "ca-2")
+		rotateCert(nodes, name, issuers[name])
+		nodes[name].printsAfter["/etc/nebula/meshy-homelab/ca.crt"] = authorityPrint("ca-2")
+	}
+	return dir, nodes
+}
+
+func TestCARotatePhase3DropsTheOldAuthority(t *testing.T) {
+	dir, nodes := phase3Mesh(t, map[string]string{"core-1": "4f3a", "web-1": "4f3a"})
+
+	out, errOut, code := captureBoth(t, func() int {
+		return run([]string{"ca", "rotate", "--phase", "3", "--mesh", dir})
+	})
+	if code != 0 {
+		t.Fatalf("exit = %d, want 0: %s%s", code, out, errOut)
+	}
+	for _, want := range []string{
+		"mesh.yml no longer trusts ca-1",
+		"ca-1.key stays in " + vault.FileName,
+		"the rotation is complete",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("the output does not hold %q:\n%s", want, out)
+		}
+	}
+
+	mesh, err := config.Load(dir)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	if len(mesh.CA.Trust) != 1 || mesh.CA.Trust[0] != "ca-2" {
+		t.Errorf("trust = %v, want ca-2 alone", mesh.CA.Trust)
+	}
+	if mesh.CA.Active != "ca-2" {
+		t.Errorf("active = %q, want ca-2", mesh.CA.Active)
+	}
+
+	// The key stays, because a deleted key cannot explain a certificate that
+	// survives in a backup.
+	record, err := vault.Read(filepath.Join(dir, vault.DirName))
+	if err != nil {
+		t.Fatalf("read the vault: %v", err)
+	}
+	cert, key, found := vault.Certificate(record, "ca-1")
+	if !found {
+		t.Fatal("the vault dropped ca-1")
+	}
+	if string(cert) != "authority certificate\n" || string(key) != "authority key\n" {
+		t.Errorf("the vault holds %q and %q, want the old pair byte for byte", cert, key)
+	}
+
+	for _, name := range []string{"core-1", "web-1"} {
+		if nodes[name].writes == 0 {
+			t.Errorf("%s took no bundle", name)
+		}
+	}
+}
+
+func TestCARotatePhase3ChangesOneLineOfMeshYml(t *testing.T) {
+	dir, _ := phase3Mesh(t, map[string]string{"core-1": "4f3a", "web-1": "4f3a"})
+	path := filepath.Join(dir, config.FileName)
+
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read mesh: %v", err)
+	}
+
+	if _, errOut, code := captureBoth(t, func() int {
+		return run([]string{"ca", "rotate", "--phase", "3", "--mesh", dir})
+	}); code != 0 {
+		t.Fatalf("exit = %d, want 0: %s", code, errOut)
+	}
+
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read mesh: %v", err)
+	}
+	want := strings.Replace(string(before), "trust: [ca-1, ca-2]", "trust: [ca-2]", 1)
+	if string(after) != want {
+		t.Errorf("mesh.yml =\n%s\nwant\n%s", after, want)
+	}
+}
+
+func TestCARotatePhase3RefusesWhileANodeHoldsTheOldCertificate(t *testing.T) {
+	dir, nodes := phase3Mesh(t, map[string]string{"core-1": "ffca-1", "web-1": "4f3a"})
+	path := filepath.Join(dir, config.FileName)
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read mesh: %v", err)
+	}
+
+	_, errOut, code := captureBoth(t, func() int {
+		return run([]string{"ca", "rotate", "--phase", "3", "--mesh", dir})
+	})
+	if code != 1 {
+		t.Fatalf("exit = %d, want 1: %s", code, errOut)
+	}
+	if !strings.Contains(errOut, "core-1 still holds a certificate from") {
+		t.Errorf("message = %q, want the node and its authority", errOut)
+	}
+
+	// A refusal leaves the file and the nodes exactly as they were.
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read mesh: %v", err)
+	}
+	if string(after) != string(before) {
+		t.Error("the refusal changed mesh.yml")
+	}
+	for _, name := range []string{"core-1", "web-1"} {
+		if nodes[name].writes != 0 {
+			t.Errorf("%s took a write from a refused phase", name)
+		}
+	}
+}
+
+func TestCARotatePhase3RefusesATrustOfOne(t *testing.T) {
+	dir := writeApplyMesh(t)
+	openApplyVault(t, dir, "core-1")
+	stubSigner(t)
+	t.Setenv("MESHY_KNOWN_HOSTS", filepath.Join(dir, "known_hosts"))
+	useFakes(t, "core-1")
+
+	stderr, code := captureErr(t, func() int {
+		return run([]string{"ca", "rotate", "--phase", "3", "--mesh", dir})
+	})
+	if code != 1 {
+		t.Errorf("exit = %d, want 1", code)
+	}
+	if !strings.Contains(stderr, "the rotation is already complete") {
+		t.Errorf("message = %q, want the completed rotation", stderr)
+	}
+}
+
+func TestCARotatePhase3ReportsANodeThatKeptTheOldAuthority(t *testing.T) {
+	dir, nodes := phase3Mesh(t, map[string]string{"core-1": "4f3a", "web-1": "4f3a"})
+	// web-1 reports a bundle that still holds the authority the file dropped.
+	nodes["web-1"].printsAfter["/etc/nebula/meshy-homelab/ca.crt"] = authorityPrint("ca-1", "ca-2")
+
+	out, _, code := captureBoth(t, func() int {
+		return run([]string{"ca", "rotate", "--phase", "3", "--mesh", dir})
+	})
+	if code != 1 {
+		t.Errorf("exit = %d, want 1: %s", code, out)
+	}
+	if !strings.Contains(out, "web-1: failed: the trust bundle on the node still holds ca-1") {
+		t.Errorf("output =\n%s\nwant the node and the authority that it still holds", out)
+	}
+	if strings.Contains(out, "the rotation is complete") {
+		t.Error("the phase called a rotation complete while a bundle still held the old authority")
 	}
 }

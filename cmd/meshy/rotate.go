@@ -33,8 +33,10 @@ func cmdCARotate(args []string) int {
 		return rotatePhase1(*meshDir)
 	case 2:
 		return rotatePhase2(*meshDir)
+	case 3:
+		return rotatePhase3(*meshDir)
 	case 0:
-		fmt.Fprintln(os.Stderr, "meshy ca rotate: name a phase with --phase 1 or --phase 2")
+		fmt.Fprintln(os.Stderr, "meshy ca rotate: name a phase with --phase 1, 2, or 3")
 		return 2
 	default:
 		fmt.Fprintf(os.Stderr, "meshy ca rotate: phase %d comes in a later change\n", *phase)
@@ -48,6 +50,9 @@ type rotateRun struct {
 	*certifier
 	dir   string
 	block []byte
+	// drop names an authority that a bundle must not hold when the run reads it
+	// back. Phase 3 sets it, because the drop is the point of that phase.
+	drop string
 }
 
 // rotatePhase1 creates the next authority, adds it to ca.trust, and applies the
@@ -236,6 +241,13 @@ func (r *rotateRun) node(ctx context.Context, mesh config.Mesh, target config.No
 	if missing := missingAuthority(certs, mesh.CA.Trust); missing != "" {
 		report.Error = fmt.Sprintf("the trust bundle on the node does not hold %s", missing)
 	}
+	if r.drop != "" {
+		for _, cert := range certs {
+			if cert.Name == r.drop {
+				report.Error = fmt.Sprintf("the trust bundle on the node still holds %s", r.drop)
+			}
+		}
+	}
 	return report
 }
 
@@ -389,6 +401,160 @@ func rotatePhase2(meshDir string) int {
 	}
 	fmt.Println("next: meshy ca rotate --phase 3")
 	return 0
+}
+
+// rotatePhase3 removes the old authority from ca.trust and applies the bundle
+// that is left to every node. It refuses while a node still holds a certificate
+// that the old authority signed, because that node would lose the trust that it
+// needs to reach the rest of the mesh. The old key stays in the vault, because a
+// deleted key cannot explain a certificate that survives in a backup.
+func rotatePhase3(meshDir string) int {
+	mesh, err := config.Load(meshDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "meshy ca rotate: %v\n", err)
+		return 2
+	}
+	if problems := mesh.Validate(); len(problems) > 0 {
+		fmt.Fprintf(os.Stderr, "mesh %q has %d problems:\n", mesh.Name, len(problems))
+		for _, problem := range problems {
+			fmt.Fprintf(os.Stderr, "  - %s\n", problem)
+		}
+		return 2
+	}
+	if len(mesh.CA.Trust) < 2 {
+		fmt.Fprintln(os.Stderr, "meshy ca rotate: the rotation is already complete")
+		return 1
+	}
+
+	old := oldAuthority(mesh.CA)
+	if old == "" {
+		fmt.Fprintln(os.Stderr, "meshy ca rotate: ca.trust holds no authority that ca.active does not name")
+		return 1
+	}
+
+	knownHosts := os.Getenv("MESHY_KNOWN_HOSTS")
+	if knownHosts == "" {
+		fmt.Fprintln(os.Stderr, "meshy ca rotate: MESHY_KNOWN_HOSTS is not set, so a host key cannot be checked")
+		return 2
+	}
+
+	run, code := newRotateRun(*mesh, meshDir)
+	if code != 0 {
+		return code
+	}
+	binary, err := run.tool()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "meshy ca rotate: %v\n", err)
+		return 2
+	}
+	signers, err := authorityFingerprints(context.Background(), binary, run.record, mesh.CA.Trust)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "meshy ca rotate: %v\n", err)
+		return 1
+	}
+	active := trustedFingerprint(signers, mesh.CA.Active)
+	if active == "" {
+		fmt.Fprintf(os.Stderr, "meshy ca rotate: the vault holds no certificate for authority %s\n", mesh.CA.Active)
+		return 1
+	}
+
+	// The signing authority of every node is read before the file changes, so a
+	// refusal leaves the mesh file and every node exactly as they were.
+	issuers, err := run.signingAuthorities(context.Background(), *mesh, knownHosts)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "meshy ca rotate: %v\n", err)
+		return 1
+	}
+	for _, target := range mesh.Nodes {
+		if target.Kind != config.KindServer {
+			continue
+		}
+		if strings.EqualFold(issuers[target.Name], active) {
+			continue
+		}
+		fmt.Fprintf(os.Stderr, "meshy ca rotate: %s still holds a certificate from %s\n",
+			target.Name, signerOf(signers, issuers[target.Name]))
+		return 1
+	}
+
+	// The file drops the authority before the bundles change, so a run that
+	// stops halfway leaves a mesh file that agrees with the nodes it reached.
+	if _, err := config.RemoveTrust(meshDir, old); err != nil {
+		fmt.Fprintf(os.Stderr, "meshy ca rotate: %v\n", err)
+		return 1
+	}
+	after, err := config.Load(meshDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "meshy ca rotate: %v\n", err)
+		return 1
+	}
+	run.mesh = after
+	run.drop = old
+	mesh = after
+
+	bundle, err := vault.TrustBundle(run.record, mesh.CA.Trust)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "meshy ca rotate: %v\n", err)
+		return 1
+	}
+
+	report := run.apply(context.Background(), *mesh, bundle, knownHosts)
+	fmt.Printf("mesh.yml no longer trusts %s\n", old)
+	fmt.Print(formatRotate(report))
+	if !report.Clean() {
+		fmt.Println("phase 3 stopped, run phase 3 again when the node answers")
+		return 1
+	}
+	fmt.Printf("%s.key stays in %s\n", old, vault.FileName)
+	fmt.Println("the rotation is complete")
+	return 0
+}
+
+// oldAuthority returns the trusted authority that ca.active does not name. A
+// rotation holds two authorities, so the other one is the old one.
+func oldAuthority(caState config.CA) string {
+	for _, name := range caState.Trust {
+		if name != caState.Active {
+			return name
+		}
+	}
+	return ""
+}
+
+// signingAuthorities reads the issuer of the certificate on every server node.
+// The phase refuses on a node that it cannot read, because the run cannot prove
+// what that node holds.
+func (r *rotateRun) signingAuthorities(ctx context.Context, mesh config.Mesh, knownHosts string) (map[string]string, error) {
+	issuers := make(map[string]string, len(mesh.Nodes))
+	for _, target := range mesh.Nodes {
+		if target.Kind != config.KindServer {
+			continue
+		}
+		session, err := dialSession(target, knownHosts)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", target.Name, err)
+		}
+		held, err := node.ReadCert(ctx, mesh, target, session)
+		if c, ok := session.(interface{ Close() error }); ok {
+			c.Close()
+		}
+		if err != nil {
+			return nil, fmt.Errorf("%s: %s", target.Name, reason(target, err))
+		}
+		issuers[target.Name] = held.Issuer
+	}
+	return issuers, nil
+}
+
+// trustedFingerprint returns the fingerprint that names a trusted authority, or an
+// empty string when the vault holds no certificate for it.
+func trustedFingerprint(signers map[string]string, name string) string {
+	for print, held := range signers {
+		if held == name {
+			return print
+		}
+	}
+	return ""
 }
 
 // rotate signs a certificate for every server node and stops at the first node
