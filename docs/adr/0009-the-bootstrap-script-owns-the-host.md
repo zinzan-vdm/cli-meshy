@@ -47,3 +47,9 @@ The node user runs a command over SSH. `apply`, `install`, and `rotate` open a s
 The first version of this script set `/usr/sbin/nologin`, which looks safer and is not. It denies every command, so a host that the script had just prepared could not be reached at all. The empty-host run in MESHY-043 found the defect, because it runs the script and then opens the session.
 
 The script now sets `/bin/sh`. The session is not interactive, and the account holds no password. The key is the only way in, and the sudoers rule above bounds what the key may run.
+
+## Why the account is not locked
+
+`useradd` creates the node user with a locked password field. sshd refuses every method for a locked account, so the key that the node holds never opens a session. The message in the daemon log is `User meshy not allowed because account is locked`.
+
+The script sets the password field to `*`, which no password hash can match. A password cannot log in, and the account is no longer locked, so sshd accepts the key. The empty-host run in MESHY-043 found this, because it opens a session as that user after it runs the script.

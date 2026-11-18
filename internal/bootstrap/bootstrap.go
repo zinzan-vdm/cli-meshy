@@ -102,6 +102,16 @@ if [ "$SHELL_NOW" != "/bin/sh" ]; then
 	usermod -s /bin/sh "$USER_NAME"
 fi
 
+# sshd refuses every method for a locked account, and useradd locks the
+# account that it creates. A password field that no hash can match keeps a
+# password out and lets the key in. See ADR 0009.
+PASSWD_NOW="$(awk -F: -v u="$USER_NAME" '$1 == u { print $2 }' /etc/shadow 2>/dev/null || true)"
+case "$PASSWD_NOW" in
+"!"* | "*LK*")
+	usermod -p '*' "$USER_NAME"
+	;;
+esac
+
 # sshd refuses the key of the node user when another user owns the home
 # directory, so the script owns the directory that the key lives in.
 HOME_DIR="$(awk -F: -v u="$USER_NAME" '$1 == u { print $6 }' /etc/passwd)"

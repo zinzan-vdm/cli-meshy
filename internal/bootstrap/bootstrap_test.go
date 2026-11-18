@@ -134,8 +134,12 @@ func TestScriptGivesTheNodeUserAShellThatRunsACommand(t *testing.T) {
 	// this user, so the shell is part of the contract.
 	line := ""
 	for _, l := range strings.Split(body, "\n") {
-		if strings.Contains(l, "useradd") {
-			line = l
+		trimmed := strings.TrimSpace(l)
+		if strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		if strings.Contains(trimmed, "useradd") {
+			line = trimmed
 		}
 	}
 	if line == "" {
@@ -160,6 +164,16 @@ func TestScriptRepairsAShellThatRefusesEveryCommand(t *testing.T) {
 	}
 	if !strings.Contains(body, `SHELL_NOW=`) {
 		t.Error("the script repairs the shell without reading the shell that the host holds")
+	}
+}
+
+func TestScriptUnlocksTheAccountWithoutAPassword(t *testing.T) {
+	body := render(t, testMesh(), serverNode())
+
+	// sshd refuses every method for a locked account, and useradd locks the
+	// account. The script sets a field that no hash can match.
+	if !strings.Contains(body, `usermod -p '*' "$USER_NAME"`) {
+		t.Error("the script leaves the account locked, so sshd refuses the key")
 	}
 }
 
