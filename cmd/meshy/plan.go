@@ -59,6 +59,7 @@ func cmdPlan(args []string) int {
 		}
 		os.Stdout.Write(body)
 	} else {
+		fmt.Print(formatRotation(report))
 		fmt.Print(formatText(report))
 	}
 
@@ -142,6 +143,40 @@ func readNode(err error) string {
 		return rest[:i]
 	}
 	return rest
+}
+
+// formatRotation prints the age of the active authority above the node rows. It
+// prints nothing when the plan read no bundle, because a guessed age is worse
+// than no age.
+func formatRotation(report plan.Report) string {
+	r := report.Rotation
+	if r == nil {
+		return ""
+	}
+
+	due := "no"
+	if r.Due {
+		due = "yes"
+	}
+
+	var out strings.Builder
+	fmt.Fprintf(&out, "mesh %s\n", report.Mesh)
+	fmt.Fprintf(&out, "  %-11s%s (%d%% of %s)\n", "authority", r.Authority, int(r.Used), r.Life())
+	fmt.Fprintf(&out, "  %-11s%s\n", "due", due)
+	fmt.Fprintf(&out, "  %-11s%s\n\n", "next", nextLine(r))
+	return out.String()
+}
+
+// nextLine names the phase that comes next, with the date it starts.
+func nextLine(r *plan.Rotation) string {
+	switch {
+	case r.Next != "phase 1":
+		return r.Next
+	case r.Due:
+		return "phase 1 now: meshy ca rotate --phase 1"
+	default:
+		return "phase 1 from " + r.PhaseDate().Format("2006-01-02")
+	}
 }
 
 func formatText(report plan.Report) string {

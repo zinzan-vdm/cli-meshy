@@ -4,7 +4,9 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -47,12 +49,26 @@ type Node struct {
 	Changes []Change `json:"changes"`
 }
 
+// Rotation is the age of the active authority against the threshold that
+// mesh.yml sets. The plan reports it, because no other output carries the date
+// on which a rotation starts.
+type Rotation struct {
+	Authority string  `json:"authority"`
+	NotBefore string  `json:"not_before"`
+	NotAfter  string  `json:"not_after"`
+	Used      float64 `json:"used"`
+	RotateAt  float64 `json:"rotate_at"`
+	Due       bool    `json:"due"`
+	Next      string  `json:"next"`
+}
+
 // Report is the plan for one mesh. A workflow parses it, so the field names are
 // the schema.
 type Report struct {
-	Mesh    string `json:"mesh"`
-	Nodes   []Node `json:"nodes"`
-	Changes int    `json:"changes"`
+	Mesh     string    `json:"mesh"`
+	Rotation *Rotation `json:"rotation,omitempty"`
+	Nodes    []Node    `json:"nodes"`
+	Changes  int       `json:"changes"`
 }
 
 // Clean reports whether the mesh file and the nodes agree. A node that could
@@ -149,7 +165,7 @@ func Compute(in Input) Report {
 
 	sort.Slice(rows, func(i, j int) bool { return rows[i].Name < rows[j].Name })
 
-	report := Report{Mesh: in.Mesh.Name, Nodes: rows}
+	report := Report{Mesh: in.Mesh.Name, Nodes: rows, Rotation: authorityAge(in)}
 	for _, row := range rows {
 		report.Changes += len(row.Changes)
 	}
@@ -375,4 +391,136 @@ func authorityFacts(m config.Mesh, st node.State) []Change {
 		}
 	}
 	return changes
+}
+
+// authorityAge reports how far the active authority is through its life. A
+// bundle that no readable node carries has no age, so the plan says nothing
+// rather than guess.
+func authorityAge(in Input) *Rotation {
+	active := in.Mesh.CA.Active
+	if active == "" || in.Now.IsZero() {
+		return nil
+	}
+
+	authority, found := bundleCert(in, active)
+	if !found {
+		return nil
+	}
+
+	notBefore, err := time.Parse(time.RFC3339, authority.NotBefore)
+	if err != nil {
+		return nil
+	}
+	notAfter, err := time.Parse(time.RFC3339, authority.NotAfter)
+	if err != nil {
+		return nil
+	}
+	lifetime := notAfter.Sub(notBefore)
+	if lifetime <= 0 {
+		return nil
+	}
+	threshold, ok := readThreshold(in.Mesh.CA.RotateAt)
+	if !ok {
+		return nil
+	}
+
+	used := in.Now.Sub(notBefore).Seconds() / lifetime.Seconds() * 100
+	used = math.Round(used*10) / 10
+
+	return &Rotation{
+		Authority: active,
+		NotBefore: authority.NotBefore,
+		NotAfter:  authority.NotAfter,
+		Used:      used,
+		RotateAt:  threshold,
+		Due:       used >= threshold,
+		Next:      nextPhase(in, active, authority.Fingerprint),
+	}
+}
+
+// bundleCert returns the authority as a readable node presents it. Every node
+// holds the same bundle, so the first readable one answers.
+func bundleCert(in Input, name string) (node.Cert, bool) {
+	for _, r := range in.Readings {
+		if r.Err != nil {
+			continue
+		}
+		for _, cert := range r.State.Authorities {
+			if cert.Name == name && cert.NotBefore != "" && cert.NotAfter != "" {
+				return cert, true
+			}
+		}
+	}
+	return node.Cert{}, false
+}
+
+// readThreshold reads the percentage that mesh.yml sets, such as 80%.
+func readThreshold(text string) (float64, bool) {
+	if !strings.HasSuffix(text, "%") {
+		return 0, false
+	}
+	value, err := strconv.ParseFloat(strings.TrimSuffix(text, "%"), 64)
+	if err != nil {
+		return 0, false
+	}
+	return value, true
+}
+
+// nextPhase names the phase that finishes the rotation. Two trusted authorities
+// mean a rotation is open, and the issuer of each node certificate says which
+// half of it is done.
+func nextPhase(in Input, active, fingerprint string) string {
+	if len(in.Mesh.CA.Trust) < 2 {
+		return "phase 1"
+	}
+	for _, r := range in.Readings {
+		if r.Err != nil || !r.State.Cert.Present {
+			continue
+		}
+		if !signedBy(r.State.Cert.Issuer, fingerprint) {
+			return "phase 2"
+		}
+	}
+	return "phase 3"
+}
+
+// signedBy reports whether the issuer names the authority. nebula-cert writes
+// the fingerprint of the authority, and a short form names the same authority.
+func signedBy(issuer, fingerprint string) bool {
+	issuer, fingerprint = strings.ToLower(issuer), strings.ToLower(fingerprint)
+	if len(issuer) < 4 || len(fingerprint) < 4 {
+		return false
+	}
+	return strings.HasPrefix(fingerprint, issuer) || strings.HasPrefix(issuer, fingerprint)
+}
+
+// Lifetime is the period between the two dates that the authority holds.
+func (r Rotation) Lifetime() time.Duration {
+	notBefore, err := time.Parse(time.RFC3339, r.NotBefore)
+	if err != nil {
+		return 0
+	}
+	notAfter, err := time.Parse(time.RFC3339, r.NotAfter)
+	if err != nil {
+		return 0
+	}
+	return notAfter.Sub(notBefore)
+}
+
+// Life writes the lifetime in years, because an authority lives for decades.
+func (r Rotation) Life() string {
+	life := r.Lifetime()
+	if years := life / (365 * 24 * time.Hour); years >= 1 {
+		return fmt.Sprintf("%dy", years)
+	}
+	return span(life)
+}
+
+// PhaseDate is the day the authority reaches the threshold.
+func (r Rotation) PhaseDate() time.Time {
+	notBefore, err := time.Parse(time.RFC3339, r.NotBefore)
+	if err != nil {
+		return time.Time{}
+	}
+	return notBefore.Add(time.Duration(float64(r.Lifetime()) * r.RotateAt / 100))
 }

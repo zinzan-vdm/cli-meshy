@@ -29,6 +29,7 @@ type Cert struct {
 	Issuer    string
 	Groups    []string
 	Addresses []string
+	NotBefore string
 	NotAfter  string
 	IsCA      bool
 }
@@ -108,12 +109,13 @@ func docs(list []certDoc) ([]Cert, error) {
 // array of one, and older versions printed the object alone.
 type certDoc struct {
 	Details struct {
-		Name     string   `json:"name"`
-		Issuer   string   `json:"issuer"`
-		Groups   []string `json:"groups"`
-		Ips      []string `json:"ips"`
-		NotAfter string   `json:"notAfter"`
-		IsCA     bool     `json:"isCA"`
+		Name      string   `json:"name"`
+		Issuer    string   `json:"issuer"`
+		Groups    []string `json:"groups"`
+		Ips       []string `json:"ips"`
+		NotBefore string   `json:"notBefore"`
+		NotAfter  string   `json:"notAfter"`
+		IsCA      bool     `json:"isCA"`
 	} `json:"details"`
 	Fingerprint string `json:"fingerprint"`
 }
@@ -129,6 +131,7 @@ func (d certDoc) cert() (Cert, error) {
 		Issuer:      d.Details.Issuer,
 		Groups:      d.Details.Groups,
 		Addresses:   d.Details.Ips,
+		NotBefore:   d.Details.NotBefore,
 		NotAfter:    d.Details.NotAfter,
 		IsCA:        d.Details.IsCA,
 	}, nil

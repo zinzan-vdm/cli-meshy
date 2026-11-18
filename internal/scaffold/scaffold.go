@@ -161,6 +161,11 @@ jobs:
             echo "::error::meshy plan produced no plan, exit code $code"
             exit 1
           fi
+          # A due rotation is a calendar fact, not a difference, so the exit
+          # code stays. The annotation carries it, and nothing blocks a merge.
+          if grep -q '"due": true' "$RUNNER_TEMP/plan.json"; then
+            echo "::warning::the active authority reached ca.rotate_at: run meshy ca rotate --phase 1"
+          fi
       - name: Remove the ssh identity
         if: always()
         run: rm -rf "${{ runner.temp }}/meshy"
@@ -240,6 +245,11 @@ jobs:
             cat "$RUNNER_TEMP/plan.json"
             echo '` + fence + `'
           } >> "$GITHUB_STEP_SUMMARY"
+          # A due rotation is a calendar fact, not a difference, so the exit
+          # code stays. The annotation carries it, and nothing blocks a merge.
+          if grep -q '"due": true' "$RUNNER_TEMP/plan.json"; then
+            echo "::warning::the active authority reached ca.rotate_at: run meshy ca rotate --phase 1"
+          fi
           echo "apply=$apply" >> "$GITHUB_OUTPUT"
       - name: Unlock
         if: steps.plan.outputs.apply == 'true'

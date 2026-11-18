@@ -309,3 +309,58 @@ func TestPlanReadsNoNodeWhenTheMeshIsInvalid(t *testing.T) {
 		t.Errorf("stdout = %q, want nothing", out)
 	}
 }
+
+// answerBundle replaces the bundle that the node presents, so the plan reads an
+// authority with a known life.
+func answerBundle(srv *testServer, body string) {
+	srv.answers["nebula-cert print -json -path /etc/nebula/meshy-homelab/ca.crt"] = body
+}
+
+const bundleWithDates = `{"details":{"name":"ca-1","isCA":true,"notBefore":"2026-01-01T00:00:00Z","notAfter":"2046-01-01T00:00:00Z"},"fingerprint":"ffee"}`
+
+// The age comes from the bundle that a node presents, so the plan needs no
+// vault. A workflow reads this text and the exit code stays untouched.
+func TestPlanPrintsTheAgeOfTheAuthority(t *testing.T) {
+	srv := startTestServer(t)
+	defer srv.stop()
+
+	dir := writeMesh(t, srv)
+	answerFacts(t, dir, srv, "1.12.0")
+	answerBundle(srv, bundleWithDates)
+
+	body, code := capture(t, func() int { return cmdPlan([]string{"--mesh", dir}) })
+	if code != 0 {
+		t.Errorf("exit = %d, want 0: %s", code, body)
+	}
+	if !strings.HasPrefix(body, "mesh homelab\n  authority  ca-1 (") {
+		t.Errorf("text =\n%s\nwant the age block above the node rows", body)
+	}
+	if !strings.HasSuffix(body, " of 20y)\n  due        no\n  next       phase 1 from 2042-01-01\n\ncore-1  ok\n") {
+		t.Errorf("text =\n%s\nwant the due state, the phase date and the node row", body)
+	}
+}
+
+func TestPlanPrintsTheRotationAsJSON(t *testing.T) {
+	srv := startTestServer(t)
+	defer srv.stop()
+
+	dir := writeMesh(t, srv)
+	answerFacts(t, dir, srv, "1.12.0")
+	answerBundle(srv, bundleWithDates)
+
+	body, code := capture(t, func() int { return cmdPlan([]string{"--json", "--mesh", dir}) })
+	if code != 0 {
+		t.Errorf("exit = %d, want 0: %s", code, body)
+	}
+	for _, want := range []string{
+		`"rotation": {`,
+		`"authority": "ca-1",`,
+		`"not_before": "2026-01-01T00:00:00Z",`,
+		`"rotate_at": 80,`,
+		`"next": "phase 1"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("json does not hold %q:\n%s", want, body)
+		}
+	}
+}
