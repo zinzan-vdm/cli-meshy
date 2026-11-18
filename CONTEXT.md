@@ -33,8 +33,12 @@ A permission for one source to reach one destination on given ports.
 _Avoid_: ACL, firewall rule, policy, grant
 
 **Bundle**:
-The archive a user node needs. It holds a certificate, a key, a config, the Nebula binary, and an installer.
+The archive a user node needs. It holds a certificate, a key, a config, the blocklist, the Nebula binary, and one installer for each platform.
 _Avoid_: config, package, payload, profile
+
+**Installer**:
+The one file in a bundle that a person runs. It places the files, installs the service, and starts it.
+_Avoid_: setup, script, bootstrap
 
 **Vault**:
 The encrypted file in the repository that holds the certificate authority key and the node keys.

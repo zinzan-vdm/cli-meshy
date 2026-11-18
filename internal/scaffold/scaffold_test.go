@@ -3,6 +3,7 @@ package scaffold_test
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/zinzan-vdm/cli-meshy/internal/config"
@@ -58,5 +59,22 @@ func TestInitDoesNotOverwrite(t *testing.T) {
 	}
 	if len(written) != 0 {
 		t.Fatalf("second Init overwrote or rewrote %v", written)
+	}
+}
+
+func TestInitKeepsTheBundlesOutOfGit(t *testing.T) {
+	dir := t.TempDir()
+	if _, err := scaffold.Init(scaffold.Options{Dir: dir, Name: "homelab"}); err != nil {
+		t.Fatalf("Init failed: %v", err)
+	}
+
+	body, err := os.ReadFile(filepath.Join(dir, ".gitignore"))
+	if err != nil {
+		t.Fatalf("read .gitignore: %v", err)
+	}
+	for _, want := range []string{".meshy/", "bundles/", "*.key"} {
+		if !strings.Contains(string(body), want) {
+			t.Errorf(".gitignore does not hold %q", want)
+		}
 	}
 }

@@ -1,0 +1,63 @@
+# meshy installer for node {{.Node}} in mesh {{.Mesh}}.
+# It writes to C:\ProgramData and registers a service, so it needs administrator rights.
+$ErrorActionPreference = 'Stop'
+
+$Dir = '{{.Destination}}'
+$Binary = Join-Path $Dir '{{.Binary}}'
+$Config = Join-Path $Dir 'config.yml'
+$Here = Split-Path -Parent $MyInvocation.MyCommand.Path
+
+$identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+$principal = New-Object Security.Principal.WindowsPrincipal($identity)
+if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+	Write-Error "meshy install: run this script as Administrator, because it writes to C:\\ProgramData and registers a service"
+	exit 1
+}
+
+New-Item -ItemType Directory -Force -Path $Dir | Out-Null
+
+if (Test-Path (Join-Path $Here '{{.Binary}}')) {
+	Copy-Item -Force (Join-Path $Here '{{.Binary}}') $Binary
+} else {
+	$tmp = Join-Path $env:TEMP ("meshy-" + [guid]::NewGuid().ToString('N'))
+	New-Item -ItemType Directory -Force -Path $tmp | Out-Null
+	try {
+		$base = '{{.BaseURL}}/{{.Version}}'
+		Invoke-WebRequest -UseBasicParsing -Uri "$base/{{.Checksum}}" -OutFile (Join-Path $tmp '{{.Checksum}}')
+		Invoke-WebRequest -UseBasicParsing -Uri "$base/{{.Asset}}" -OutFile (Join-Path $tmp '{{.Asset}}')
+
+		# The project publishes a zip for Windows, so the name ends in .zip.
+		$lines = Get-Content (Join-Path $tmp '{{.Checksum}}')
+		$want = $null
+		foreach ($line in $lines) {
+			$field = $line -split '\s+'
+			if ($field.Count -eq 2 -and $field[1].TrimStart('*') -eq '{{.Asset}}') { $want = $field[0] }
+		}
+		if (-not $want) { Write-Error "meshy install: {{.Checksum}} holds no line for {{.Asset}}"; exit 1 }
+
+		$got = (Get-FileHash -Algorithm SHA256 (Join-Path $tmp '{{.Asset}}')).Hash.ToLower()
+		if ($got -ne $want.ToLower()) { Write-Error "meshy install: {{.Asset}} does not match its checksum"; exit 1 }
+
+		Expand-Archive -Force -Path (Join-Path $tmp '{{.Asset}}') -DestinationPath $tmp
+		Copy-Item -Force (Join-Path $tmp '{{.Binary}}') $Binary
+	} finally {
+		Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
+	}
+}
+
+Copy-Item -Force (Join-Path $Here 'blocklist.txt') (Join-Path $Dir 'blocklist.txt')
+Copy-Item -Force (Join-Path $Here 'config.yml') $Config
+Copy-Item -Force (Join-Path $Here 'ca.crt') (Join-Path $Dir 'ca.crt')
+Copy-Item -Force (Join-Path $Here '{{.Node}}.crt') (Join-Path $Dir '{{.Node}}.crt')
+Copy-Item -Force (Join-Path $Here '{{.Node}}.key') (Join-Path $Dir '{{.Node}}.key')
+
+& $Binary -service install -config $Config
+& $Binary -service start
+
+$state = (Get-Service -Name 'nebula').Status
+if ($state -ne 'Running') {
+	Write-Error "meshy install: the nebula service reports $state"
+	exit 1
+}
+
+Write-Output 'meshy-{{.Mesh}} is running'

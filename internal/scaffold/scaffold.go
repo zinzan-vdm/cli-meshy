@@ -48,6 +48,7 @@ rules: []
 `
 
 const gitignore = `.meshy/
+bundles/
 *.key
 *.crt
 *.local.yml

@@ -2,11 +2,11 @@
 
 `meshy` builds and maintains private overlay networks on top of Nebula. One git repository describes one mesh. A pull request plans the change, a merge applies it, and a GitHub Actions runner does the work. `meshy` also runs locally with the same code path.
 
-Status: pre-alpha. `init`, `validate`, `plan`, `ca init`, `issue`, `bootstrap`, `install`, `unlock`, `lock`, and `apply` work.
+Status: pre-alpha. `init`, `validate`, `plan`, `ca init`, `issue`, `bootstrap`, `install`, `bundle`, `unlock`, `lock`, and `apply` work.
 
 ## What it does
 
-Nebula carries the traffic. Each node holds a certificate that names its address and its groups, and each node enforces its own inbound rules. `meshy` generates the certificates, generates the configuration, writes it to the nodes over SSH, and signals a reload. It also produces a single archive for people who install by hand.
+Nebula carries the traffic. Each node holds a certificate that names its address and its groups, and each node enforces its own inbound rules. `meshy` generates the certificates, generates the configuration, writes it to the nodes over SSH, and signals a reload. For a node that it cannot reach, it writes a single archive that a person unpacks.
 
 Access is written as a rule from a source to a destination on a port:
 
@@ -122,6 +122,26 @@ The exit code is 0 when every node matches or was updated. It is 1 when at least
 
 The write runs as the node user and needs no sudo. Only the unit command uses `sudo`: a reload when the unit runs, and a restart when it does not. The rules are in [docs/patterns/0009](docs/patterns/0009-a-write-to-a-node-replaces-the-file-by-rename.md), [0010](docs/patterns/0010-the-unit-reloads-once-after-the-last-write.md), and [0011](docs/patterns/0011-a-stopped-unit-is-started-not-reloaded.md).
 
+### Join a user node
+
+A user node is a machine that `meshy` cannot reach over SSH, so the control plane cannot configure it. `bundle` writes one archive for it:
+
+```sh
+meshy unlock
+meshy bundle laptop-1
+meshy bundle laptop-1 --no-binary
+```
+
+The command writes `bundles/<mesh>/<node>.tar.gz` and prints that path. The archive holds the rendered `config.yml`, `ca.crt`, the node certificate, the node key, `blocklist.txt`, the pinned binary, and one installer for each platform. The file has mode 0600 and the key has mode 0600 inside the archive, because both hold a private key.
+
+`bundle` renews a certificate that is inside `certificates.renew_before` before it builds the archive, so the archive and the vault hold the same certificate. It reads the binary from `.meshy/bin/<version>/<os>-<arch>/`, which is the cache that `meshy install` fills, and fetches the release through the same path when the cache is empty. `--no-binary` leaves the binary out, and the installer then downloads the pinned release and checks its checksum.
+
+A server node is refused with a message that names `apply`. A locked vault is refused with a message that names `meshy unlock`.
+
+The person unpacks the archive and runs one file: `install.sh` on Linux, `install.command` on macOS, or `install.ps1` on Windows. The installer needs root, places the files in `/etc/nebula/meshy-<mesh>/`, installs the service, and starts it. On Linux it writes `nebula@meshy-<mesh>.service`, which is the unit that `apply` reloads. Delivery of the archive is out of band.
+
+The decisions are in [docs/adr/0010](docs/adr/0010-one-archive-carries-every-installer.md). The rules are in [docs/patterns/0017](docs/patterns/0017-a-bundle-is-built-in-memory-and-written-once.md) and [0018](docs/patterns/0018-an-installer-checks-its-rights-before-it-writes.md).
+
 ## Commands
 
 | Command | State |
@@ -134,7 +154,7 @@ The write runs as the node user and needs no sudo. Only the unit command uses `s
 | `plan` | works |
 | `apply` | works |
 | `install` | works |
-| `bundle` | planned |
+| `bundle` | works |
 | `bootstrap` | works |
 | `ca rotate` | planned |
 
