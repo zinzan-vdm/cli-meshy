@@ -45,6 +45,7 @@ func TestScriptPreparesTheUserTheRuleTheDirectoryAndTheUnit(t *testing.T) {
 		"chmod 0700 \"$DIR\"",
 		"systemctl daemon-reload",
 		"ExecStart=/usr/local/bin/nebula -config /etc/nebula/meshy-homelab/config.yml",
+		"ExecReload=/bin/kill -HUP $MAINPID",
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("the script does not hold %q:\n%s", want, body)

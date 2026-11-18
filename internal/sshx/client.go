@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"strconv"
@@ -119,6 +120,12 @@ func authMethods(keyPath string) ([]ssh.AuthMethod, []net.Conn, error) {
 // Run runs one command and returns its output and exit status. A command that
 // exits non-zero is a result, not an error.
 func (c *Client) Run(ctx context.Context, cmd string) (node.Result, error) {
+	return c.run(ctx, cmd, nil)
+}
+
+// run runs one command with an optional stdin and returns its output and exit
+// status.
+func (c *Client) run(ctx context.Context, cmd string, stdin io.Reader) (node.Result, error) {
 	sess, err := c.client.NewSession()
 	if err != nil {
 		return node.Result{}, fmt.Errorf("%s: %w", c.host, err)
@@ -128,6 +135,9 @@ func (c *Client) Run(ctx context.Context, cmd string) (node.Result, error) {
 	var out, errOut bytes.Buffer
 	sess.Stdout = &out
 	sess.Stderr = &errOut
+	if stdin != nil {
+		sess.Stdin = stdin
+	}
 
 	done := make(chan error, 1)
 	go func() { done <- sess.Run(cmd) }()

@@ -115,6 +115,7 @@ Wants=network-online.target
 [Service]
 Type=simple
 ExecStart={{.Binary}} -config {{.Dir}}/config.yml
+ExecReload=/bin/kill -HUP $MAINPID
 Restart=on-failure
 RestartSec=5s
 User={{.User}}

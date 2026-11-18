@@ -1,3 +1,4 @@
+apply
 ci
 code
 comments
@@ -5,6 +6,8 @@ keys
 licence
 nebula
 rendering
+ssh
+systemd
 tests
 vault
 vendoring

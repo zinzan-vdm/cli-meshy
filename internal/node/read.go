@@ -2,6 +2,7 @@ package node
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -28,6 +29,10 @@ type Result struct {
 type Executor interface {
 	Run(ctx context.Context, cmd string) (Result, error)
 }
+
+// ErrNoFile reports a path that the node does not hold. A caller that writes
+// files needs to tell a missing file from a failed read.
+var ErrNoFile = errors.New("no such file")
 
 // Dir is the config directory on a node.
 func Dir(mesh string) string { return "/etc/nebula/meshy-" + mesh }

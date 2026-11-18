@@ -2,7 +2,7 @@
 
 `meshy` builds and maintains private overlay networks on top of Nebula. One git repository describes one mesh. A pull request plans the change, a merge applies it, and a GitHub Actions runner does the work. `meshy` also runs locally with the same code path.
 
-Status: pre-alpha. `init` and `validate` work. Nothing touches a node yet.
+Status: pre-alpha. `init`, `validate`, `plan`, `ca init`, `issue`, `bootstrap`, `unlock`, `lock`, and `apply --node` work.
 
 ## What it does
 
@@ -84,17 +84,35 @@ A second run changes nothing, so the same command repairs a node.
 
 The order for one host is `bootstrap`, then `meshy install`, then `meshy apply`. `bootstrap` refuses a user node, because a user node gets a bundle rather than a unit. The decisions behind the script are in [docs/adr/0009](docs/adr/0009-the-bootstrap-script-owns-the-host.md).
 
+### Apply the config to one node
+
+`apply` writes the config, the certificate, the authority certificate, and the key to one node, then reloads the unit one time:
+
+```sh
+meshy unlock
+meshy issue web-1
+meshy apply --node web-1
+```
+
+The vault must be open, and it must hold a certificate for the node. A missing certificate stops the run with a message that names `meshy issue`. A missing unit stops the run with a message that names `meshy bootstrap`.
+
+`apply` writes a file only when the content differs. A second run changes nothing and does not reload. Each file goes to a temporary name and a rename, so a failed write leaves the previous file in place.
+
+The exit code is 0 when the node matches or was updated. It is 1 when the node failed or the unit is missing. It is 2 when the run never started. `--node` is required, and this build writes one node per run.
+
+The write runs as the node user and needs no sudo. Only the reload uses `sudo -n systemctl reload`. The two rules are in [docs/patterns/0009](docs/patterns/0009-a-write-to-a-node-replaces-the-file-by-rename.md) and [0010](docs/patterns/0010-the-unit-reloads-once-after-the-last-write.md).
+
 ## Commands
 
 | Command | State |
 |---|---|
 | `init` | works |
 | `validate` | works |
-| `ca init` | planned |
-| `unlock`, `lock` | planned |
-| `issue` | planned |
-| `plan` | next |
-| `apply` | planned |
+| `ca init` | works |
+| `unlock`, `lock` | works |
+| `issue` | works |
+| `plan` | works |
+| `apply` | works for one node |
 | `install` | planned |
 | `bundle` | planned |
 | `bootstrap` | works |
