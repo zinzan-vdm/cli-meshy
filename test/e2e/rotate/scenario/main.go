@@ -108,6 +108,11 @@ func (c *cluster) rotate() error {
 	if err := c.startPing(); err != nil {
 		return fmt.Errorf("start the ping: %w", err)
 	}
+	// The reload must happen inside a window that already carries traffic, so
+	// the count speaks about the reload and not about a ping that began late.
+	if err := c.waitForReplies(3); err != nil {
+		return err
+	}
 	if _, err := c.meshyRun("ca", "rotate", "--phase", "2", "--mesh", c.meshDir); err != nil {
 		c.stopPing()
 		return fmt.Errorf("phase 2: %w", err)
@@ -213,6 +218,19 @@ func (c *cluster) startPing() error {
 	_, err := c.composeRun("node-b", "sh", "-c",
 		"rm -f /tmp/rotate-ping.log /tmp/rotate-ping.pid; ping -i 0.2 -W 1 "+peer+" >/tmp/rotate-ping.log 2>&1 & echo $! >/tmp/rotate-ping.pid")
 	return err
+}
+
+// waitForReplies waits until the running ping has carried n replies. It counts
+// the lines of the log, because a ping that is still running prints no summary.
+func (c *cluster) waitForReplies(n int) error {
+	for i := 0; i < 60; i++ {
+		out, err := c.composeRun("node-b", "sh", "-c", "cat /tmp/rotate-ping.log 2>/dev/null || true")
+		if err == nil && strings.Count(out, "bytes from") >= n {
+			return nil
+		}
+		sleep()
+	}
+	return fmt.Errorf("the ping did not carry %d replies before the rotation", n)
 }
 
 // stopPing stops the ping and returns the replies that it sent and received.
