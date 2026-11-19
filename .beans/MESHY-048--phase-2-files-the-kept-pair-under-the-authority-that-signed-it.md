@@ -1,7 +1,7 @@
 ---
 # MESHY-048
 title: Phase 2 files the kept pair under the authority that signed it
-status: todo
+status: in-progress
 type: bug
 priority: normal
 tags:
@@ -9,7 +9,7 @@ tags:
     - vault
     - defect
 created_at: 2026-11-19T10:38:40Z
-updated_at: 2026-11-19T10:38:40Z
+updated_at: 2026-11-19T12:45:35Z
 ---
 
 ## Overview
@@ -57,10 +57,38 @@ When the run cannot read the issuer of the kept certificate, or the issuer is em
 
 ## Acceptance Criteria
 
-- [ ] The kept pair of a node that is behind is stored under the authority that signed the kept certificate.
-- [ ] The kept pair of a node that is current is stored under the same name as before.
-- [ ] A test covers a node that is behind, and it fails when the label comes from the node certificate.
-- [ ] Phase 2 refuses the node and writes no kept pair when the kept issuer is empty or unreadable.
-- [ ] The node keeps its current certificate when phase 2 refuses it.
-- [ ] `go build ./...`, `go vet ./...`, and `go test ./...` pass.
-- [ ] `beans check` passes.
+- [x] The kept pair of a node that is behind is stored under the authority that signed the kept certificate.
+- [x] The kept pair of a node that is current is stored under the same name as before.
+- [x] A test covers a node that is behind, and it fails when the label comes from the node certificate.
+- [x] Phase 2 refuses the node and writes no kept pair when the kept issuer is empty or unreadable.
+- [x] The node keeps its current certificate when phase 2 refuses it.
+- [x] `go build ./...`, `go vet ./...`, and `go test ./...` pass.
+- [x] `beans check` passes.
+
+## Summary of Changes
+
+Phase 2 files the kept pair under the authority that signed it.
+
+### Files
+
+- `cmd/meshy/rotate.go`: phase 2 reads the issuer of the kept certificate with `issue.Print` and files the pair under that name. An empty issuer stops the node before any write.
+- `cmd/meshy/rotate_integration_test.go`: a subtest where the vault holds a ca-2 pair and the node holds a ca-1 certificate.
+- `cmd/meshy/rotate_test.go`: a test where the kept certificate names no issuer, so phase 2 refuses the node.
+- `cmd/meshy/issue_test.go`: the stub print names an issuer, because a rotation reads the field.
+
+### Decisions
+
+- The label comes from `issue.Print` on the kept certificate, which is the reader that phase 2 uses for `details.issuer`. One code path, so both labels come from a certificate.
+- The issuer is read before `issue.Sign`, so a refusal writes no kept pair, no vault certificate, and no node file.
+- `signerOf` stays, because phase 3 names the signer in its refusal message.
+
+### Deviations
+
+None.
+
+### Measurements
+
+- `gofmt -l .` silent, `go build ./...`, `go vet ./...`, and `go test ./...` pass.
+- `TestCARotatePhase2SignsWithTheRealTool/a_node_that_is_behind_keeps_its_pair_under_its_signer` passes with `nebula-cert` 1.12.0. It fails when the label comes from the node certificate, with `the vault filed the kept pair under [ca-1], want ca-2`.
+- `TestCARotatePhase2RefusesAKeptCertificateWithNoIssuer` passes.
+- The live rotation job did not run on this host, which has no Docker and no `/dev/net/tun`.
