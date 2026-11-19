@@ -1,7 +1,8 @@
-// Command scenario runs the live rotation of MESHY-034. It creates a vault in
-// the run, applies the mesh to two live containers, rotates the trust anchor in
-// two phases, and pings across the tunnel while phase 2 replaces the
-// certificates. Each assertion prints one line.
+// Command scenario runs the live rotation of MESHY-034 and MESHY-035. It
+// creates a vault in the run, applies the mesh to two live containers, rotates
+// the trust anchor in three phases, and pings across the tunnel while phase 2
+// replaces the certificates and phase 3 drops the old authority. Each
+// assertion prints one line.
 package main
 
 import (
@@ -13,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/zinzan-vdm/cli-meshy/internal/node"
+	"github.com/zinzan-vdm/cli-meshy/internal/vault"
 )
 
 // dirName is where the CLI writes the files of the mesh on a node.
@@ -63,7 +65,7 @@ func run(args []string) int {
 		fmt.Fprintf(os.Stderr, "rotate: %v\n", err)
 		return 1
 	}
-	fmt.Println("rotate: 7 assertions passed")
+	fmt.Println("rotate: 11 assertions passed")
 	return 0
 }
 
@@ -103,6 +105,17 @@ func (c *cluster) rotate() error {
 	}
 	pass(4, "phase 1 gives both nodes the trust bundle of ca-1 and ca-2")
 
+	// The mesh has not promoted ca-2 yet, so phase 3 would drop the authority
+	// that the mesh is moving to.
+	early, err := c.meshyRun("ca", "rotate", "--phase", "3", "--mesh", c.meshDir)
+	if err == nil {
+		return fmt.Errorf("phase 3 ran before phase 2")
+	}
+	if !strings.Contains(early, "run phase 2 first") {
+		return fmt.Errorf("phase 3 refused without naming phase 2: %s", strings.TrimSpace(early))
+	}
+	pass(5, "phase 3 refuses before phase 2 has made ca-2 active")
+
 	// The ping runs through phase 2, so a reload that drops the tunnel would
 	// show as a lost reply.
 	if err := c.startPing(); err != nil {
@@ -136,7 +149,7 @@ func (c *cluster) rotate() error {
 	if afterB.Fingerprint == beforeB.Fingerprint {
 		return fmt.Errorf("node-b holds the certificate %s before and after phase 2", afterB.Fingerprint)
 	}
-	pass(5, "phase 2 replaces the certificate of node-a (%s -> %s) and of node-b (%s -> %s)",
+	pass(6, "phase 2 replaces the certificate of node-a (%s -> %s) and of node-b (%s -> %s)",
 		short(before.Fingerprint), short(after.Fingerprint), short(beforeB.Fingerprint), short(afterB.Fingerprint))
 
 	// Phase 2 reloads both nodes in about a second, and the ping runs at 0.1
@@ -148,7 +161,7 @@ func (c *cluster) rotate() error {
 	if got != sent {
 		return fmt.Errorf("the tunnel lost %d of %d replies during phase 2", sent-got, sent)
 	}
-	pass(6, "the tunnel lost 0 of %d replies while phase 2 reloaded both nodes", sent)
+	pass(7, "the tunnel lost 0 of %d replies while phase 2 reloaded both nodes", sent)
 
 	second, err := c.authority("node-a", "ca-2")
 	if err != nil {
@@ -162,7 +175,74 @@ func (c *cluster) rotate() error {
 			return fmt.Errorf("%s reports issuer %s, ca-2 is %s", held.name, held.cert.Issuer, second.Fingerprint)
 		}
 	}
-	pass(7, "every node signs with ca-2 (%s)", short(second.Fingerprint))
+	pass(8, "every node signs with ca-2 (%s)", short(second.Fingerprint))
+
+	// A stopped phase 2 leaves a node on its old pair. The scenario builds that
+	// state by putting the pair that phase 2 kept back on node-a, and puts the
+	// current pair back after the refusal.
+	if err := c.put("node-a", "node-a.crt.previous.ca-1", "node-a.crt"); err != nil {
+		return err
+	}
+	if err := c.put("node-a", "node-a.key.previous.ca-1", "node-a.key"); err != nil {
+		return err
+	}
+	refused, err := c.meshyRun("ca", "rotate", "--phase", "3", "--mesh", c.meshDir)
+	if err == nil {
+		return fmt.Errorf("phase 3 ran while node-a held a certificate from ca-1")
+	}
+	if !strings.Contains(refused, "still holds a certificate from") {
+		return fmt.Errorf("phase 3 refused without naming the node and its authority: %s", strings.TrimSpace(refused))
+	}
+	if err := c.put("node-a", "node-a.crt", "node-a.crt"); err != nil {
+		return err
+	}
+	if err := c.put("node-a", "node-a.key", "node-a.key"); err != nil {
+		return err
+	}
+	pass(9, "phase 3 refuses while node-a holds a certificate from ca-1")
+
+	// Phase 3 drops the authority while the tunnel carries traffic, so a node
+	// that loses its trust would show as a lost reply.
+	if err := c.startPing(); err != nil {
+		return fmt.Errorf("start the ping: %w", err)
+	}
+	if err := c.waitForReplies(3); err != nil {
+		return err
+	}
+	phase3, err := c.meshyRun("ca", "rotate", "--phase", "3", "--mesh", c.meshDir)
+	if err != nil {
+		c.stopPing()
+		return fmt.Errorf("phase 3: %w", err)
+	}
+	sent3, got3, err := c.stopPing()
+	if err != nil {
+		return err
+	}
+	if sent3 < 5 {
+		return fmt.Errorf("the ping sent %d replies, too few to cover phase 3", sent3)
+	}
+	if got3 != sent3 {
+		return fmt.Errorf("the tunnel lost %d of %d replies during phase 3", sent3-got3, sent3)
+	}
+	if !strings.Contains(phase3, "the rotation is complete") {
+		return fmt.Errorf("phase 3 did not report a complete rotation: %s", strings.TrimSpace(phase3))
+	}
+	pass(10, "phase 3 removes ca-1 and the tunnel lost 0 of %d replies", sent3)
+
+	if err := c.waitForOneAuthority("node-a"); err != nil {
+		return err
+	}
+	if err := c.waitForOneAuthority("node-b"); err != nil {
+		return err
+	}
+	last, err := c.authority("node-a", "ca-2")
+	if err != nil {
+		return err
+	}
+	if _, err := os.Stat(filepath.Join(c.meshDir, vault.DirName, "ca-1.key")); err != nil {
+		return fmt.Errorf("the vault dropped ca-1.key: %w", err)
+	}
+	pass(11, "both nodes trust ca-2 alone (%s) and ca-1.key stays in the vault", short(last.Fingerprint))
 	return nil
 }
 
@@ -215,6 +295,19 @@ func (c *cluster) waitForTrust(service string) error {
 		sleep()
 	}
 	return fmt.Errorf("%s does not hold two authorities", service)
+}
+
+// waitForOneAuthority waits for the bundle on a node to hold one authority,
+// because the reload of the bundle comes after the file is written.
+func (c *cluster) waitForOneAuthority(service string) error {
+	for i := 0; i < 30; i++ {
+		certs, err := c.authorities(service)
+		if err == nil && len(certs) == 1 {
+			return nil
+		}
+		sleep()
+	}
+	return fmt.Errorf("%s does not hold one authority", service)
 }
 
 func (c *cluster) startPing() error {
@@ -291,6 +384,31 @@ func (c *cluster) meshyRun(args ...string) (string, error) {
 		return string(out), fmt.Errorf("meshy %s: %v: %s", strings.Join(args, " "), err, strings.TrimSpace(string(out)))
 	}
 	return string(out), nil
+}
+
+// put copies a file from the vault of this run onto a node. The scenario uses
+// it to build the state that a stopped phase leaves behind, and to undo that
+// state afterwards.
+func (c *cluster) put(service, from, name string) error {
+	source := filepath.Join(c.meshDir, vault.DirName, from)
+	if _, err := os.Stat(source); err != nil {
+		return fmt.Errorf("the vault holds no %s: %w", from, err)
+	}
+	target := service + ":" + dirName + "/" + name
+	full := []string{"compose", "-f", c.compose, "cp", source, target}
+	out, err := exec.Command("docker", full...).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("docker %s: %v: %s", strings.Join(full, " "), err, strings.TrimSpace(string(out)))
+	}
+	// docker compose cp writes the file as root with the mode of the source.
+	// The node reads it as the node user, so the copy takes the owner of the
+	// file beside it and the mode that a private key needs.
+	fix := fmt.Sprintf("uid=$(stat -c %%u %s/config.yml) && chown \"$uid\" %s/%s && chmod 600 %s/%s",
+		dirName, dirName, name, dirName, name)
+	if out, err := c.composeRun(service, "sh", "-c", fix); err != nil {
+		return fmt.Errorf("take the owner of %s on %s: %w: %s", name, service, err, strings.TrimSpace(out))
+	}
+	return nil
 }
 
 func (c *cluster) composeRun(service string, args ...string) (string, error) {

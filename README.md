@@ -2,7 +2,7 @@
 
 `meshy` builds and maintains private overlay networks on top of Nebula. One git repository describes one mesh. A pull request plans the change, a merge applies it, and a GitHub Actions runner does the work. `meshy` also runs locally with the same code path.
 
-Status: pre-alpha. `init`, `validate`, `plan`, `ca init`, `ca rotate --phase 1` and `--phase 2`, `issue`, `bootstrap`, `install`, `bundle`, `unlock`, `lock`, and `apply` work.
+Status: pre-alpha. `init`, `validate`, `plan`, `ca init`, `ca rotate --phase 1`, `--phase 2` and `--phase 3`, `issue`, `bootstrap`, `install`, `bundle`, `unlock`, `lock`, and `apply` work.
 
 ## What it does
 
@@ -145,7 +145,15 @@ The command refuses to run when `ca.trust` already holds two authorities, and wh
 
 Phase 2 refuses while `ca.trust` holds one authority, and it stops at the first node that does not come back. A mesh that the new authority already signs is reported as no change.
 
-The decisions are in [docs/adr/0011](docs/adr/0011-a-trust-bundle-is-one-file-of-certificates.md) and [docs/adr/0012](docs/adr/0012-phase-2-changes-the-active-authority.md). The rules for the edit and the write are in [docs/patterns/0020](docs/patterns/0020-an-edit-to-mesh-yml-keeps-every-other-byte.md) and [0021](docs/patterns/0021-a-rotation-signs-then-reloads.md).
+Phase 3 drops the old authority:
+
+```sh
+meshy ca rotate --phase 3
+```
+
+The command reads the signing authority from every node. It then removes the old authority from `ca.trust`, applies the bundle that is left, and reads the bundle back from each node. It refuses while a node still holds a certificate that the old authority signed, and it reports a rotation that is already complete. The old key stays in the vault, because a deleted key cannot explain a certificate that survives in a backup.
+
+The decisions are in [docs/adr/0011](docs/adr/0011-a-trust-bundle-is-one-file-of-certificates.md), [docs/adr/0012](docs/adr/0012-phase-2-changes-the-active-authority.md) and [docs/adr/0015](docs/adr/0015-the-old-key-outlives-the-rotation.md). The rules for the edit and the write are in [docs/patterns/0020](docs/patterns/0020-an-edit-to-mesh-yml-keeps-every-other-byte.md), [0021](docs/patterns/0021-a-rotation-signs-then-reloads.md) and [0024](docs/patterns/0024-a-rotation-reads-the-signer-first.md).
 
 ### Join a user node
 
@@ -181,8 +189,7 @@ The decisions are in [docs/adr/0010](docs/adr/0010-one-archive-carries-every-ins
 | `install` | works |
 | `bundle` | works |
 | `bootstrap` | works |
-| `ca rotate --phase 1`, `ca rotate --phase 2` | works |
-| `ca rotate --phase 3` | planned |
+| `ca rotate --phase 1`, `ca rotate --phase 2`, `ca rotate --phase 3` | works |
 
 `--mesh <dir>` selects the directory that holds `mesh.yml`. It defaults to the current directory.
 

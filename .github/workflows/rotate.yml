@@ -1,8 +1,9 @@
 name: rotate
 
-# The live rotation of MESHY-034. It needs root, /dev/net/tun, and a container
-# runtime, so it stays apart from the unit job in ci.yml. The scenario proves
-# that phase 2 replaces every certificate with no reply lost on the tunnel.
+# The live rotation of MESHY-034 and MESHY-035. It needs root, /dev/net/tun, and
+# a container runtime, so it stays apart from the unit job in ci.yml. The
+# scenario proves that phase 2 replaces every certificate with no reply lost,
+# and that phase 3 drops the old authority with no reply lost.
 on:
   pull_request:
   workflow_dispatch:
