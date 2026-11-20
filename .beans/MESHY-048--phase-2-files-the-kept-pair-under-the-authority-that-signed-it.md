@@ -1,7 +1,7 @@
 ---
 # MESHY-048
 title: Phase 2 files the kept pair under the authority that signed it
-status: in-progress
+status: completed
 type: bug
 priority: normal
 tags:
@@ -9,7 +9,7 @@ tags:
     - vault
     - defect
 created_at: 2026-11-19T10:38:40Z
-updated_at: 2026-11-19T12:45:35Z
+updated_at: 2026-11-20T19:32:25Z
 ---
 
 ## Overview

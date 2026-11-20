@@ -208,7 +208,7 @@ The decisions are in [docs/adr/0010](docs/adr/0010-one-archive-carries-every-ins
 
 `--mesh <dir>` selects the directory that holds `mesh.yml`. It defaults to the current directory.
 
-The work is tracked in `.beans/`, one markdown file per ticket with YAML frontmatter. `beans list` shows the tree, and `beans show <id>` shows one ticket.
+The work is tracked in `.beans/`, one markdown file per ticket with YAML frontmatter. `beans list` shows the tree, and `beans show <id>` shows one ticket. `go install github.com/hmans/beans@v0.4.2` installs the tool. The `test` check runs `beans check` on every pull request.
 
 ## Licence
 
