@@ -22,6 +22,8 @@ jobs:
         run: go vet ./...
       - name: Test
         run: go test ./...
+      - name: Check the ticket set
+        run: go run github.com/hmans/beans@v0.4.2 check
       - name: Scaffold a mesh and validate it
         run: |
           go run ./cmd/meshy init --name smoke --cidr 10.42.0.0/24 --owner nobody "$RUNNER_TEMP/smoke"
