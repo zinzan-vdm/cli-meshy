@@ -1,7 +1,7 @@
 ---
 # MESHY-047
 title: The README names the checks that block a merge
-status: todo
+status: completed
 type: task
 priority: normal
 tags:
@@ -9,7 +9,7 @@ tags:
     - ci
     - release
 created_at: 2026-11-19T10:38:40Z
-updated_at: 2026-11-19T10:38:40Z
+updated_at: 2026-11-19T12:44:28Z
 ---
 
 ## Overview
@@ -55,9 +55,34 @@ The section states that the three live checks need root, `/dev/net/tun`, and a c
 
 ## Acceptance Criteria
 
-- [ ] The README holds a section named `## Protect main`.
-- [ ] The section lists the four workflows and the check name that each one reports.
-- [ ] The section names the repository setting and the four checks to select.
-- [ ] The section states that the three live checks need root, `/dev/net/tun`, and a container runtime.
-- [ ] `python3 ~/.hermes/skills/writing/write-tism/scripts/audit.py README.md` reports `total: 0`.
-- [ ] `beans check` passes.
+- [x] The README holds a section named `## Protect main`.
+- [x] The section lists the four workflows and the check name that each one reports.
+- [x] The section names the repository setting and the four checks to select.
+- [x] The section states that the three live checks need root, `/dev/net/tun`, and a container runtime.
+- [x] `python3 ~/.hermes/skills/writing/write-tism/scripts/audit.py README.md` reports `total: 0`.
+- [x] `beans check` passes.
+
+## Summary of Changes
+
+The README names the four workflows, the check that each one reports, and the setting that requires them on `main`.
+
+### Files
+
+- `README.md`: a `## Protect main` section sits between `## Build` and `## Use`. It holds the four-row table, the setting path, and the note on root, `/dev/net/tun`, and a container runtime.
+
+### Decisions
+
+- The check name comes from the `name` field of the job in each workflow file. `ci.yml` sets no `name`, so its job id `test` is the check name that GitHub reports.
+- The table stays at four rows. `e2e.yml`, `rotate.yml`, and `host.yml` also accept `workflow_dispatch`, but each one runs on every pull request, so each one can block a merge.
+- The section points at no secrets. `docs/conf/0002` already names them.
+
+### Deviations
+
+None.
+
+### Measurements
+
+- `gofmt -l .` silent, `go build ./...` and `go vet ./...` pass.
+- 377 test results across 24 packages.
+- `audit.py` reports `total: 0` for `README.md` and this ticket.
+- `beans check` reports `All checks passed`.

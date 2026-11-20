@@ -38,6 +38,21 @@ go test ./...
 go run ./cmd/meshy version
 ```
 
+## Protect main
+
+Each workflow reports one check. A repository owner requires the four checks on `main`.
+
+| Workflow | Check | What it proves |
+|---|---|---|
+| `ci.yml` | `test` | the build, the vet, and the unit tests pass |
+| `e2e.yml` | `live mesh` | four assertions on a live mesh of containers |
+| `rotate.yml` | `live rotation` | phase 2 and phase 3 of a rotation lose no reply |
+| `host.yml` | `empty host` | seven assertions on a host that holds nothing |
+
+Open Settings, then Branches, then Add branch protection rule, then `main`. Select Require status checks to pass, then select `test`, `live mesh`, `live rotation`, and `empty host`.
+
+The three live checks need root, `/dev/net/tun`, and a container runtime. That need is why each one has its own workflow and its own job.
+
 ## Use
 
 Create a mesh repository in an empty directory:
