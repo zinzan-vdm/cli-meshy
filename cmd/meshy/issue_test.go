@@ -61,7 +61,7 @@ func stubSigner(t *testing.T) {
 	dir := t.TempDir()
 	script := `#!/bin/sh
 if [ "$1" = "print" ]; then
-  printf '[{"details":{"name":"stub","groups":[],"networks":[],"notAfter":"%s"},"fingerprint":"%s"}]\n' "$STUB_EXPIRY" "$STUB_FINGERPRINT"
+  printf '[{"details":{"name":"stub","groups":[],"networks":[],"notAfter":"%s","issuer":"%s"},"fingerprint":"%s"}]\n' "$STUB_EXPIRY" "$STUB_ISSUER" "$STUB_FINGERPRINT"
   exit 0
 fi
 printf '%s\n' "$@" > "$STUB_ARGS"
@@ -86,6 +86,9 @@ done
 	t.Setenv("STUB_ARGS", filepath.Join(t.TempDir(), "args"))
 	t.Setenv("STUB_COUNT", filepath.Join(t.TempDir(), "count"))
 	t.Setenv("STUB_FINGERPRINT", "4f3a")
+	// A print names the issuer, because a rotation reads it to name the
+	// authority that signed a certificate.
+	t.Setenv("STUB_ISSUER", "4f3a")
 	setExpiry(t, time.Now().Add(300*24*time.Hour))
 }
 

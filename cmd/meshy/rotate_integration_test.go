@@ -108,6 +108,40 @@ func TestCARotatePhase2SignsWithTheRealTool(t *testing.T) {
 	if string(previous) != oldCore {
 		t.Error("the pair that the vault kept is not the certificate that the node held")
 	}
+
+	// A node that an earlier run did not reach keeps the certificate that ca-1
+	// signed while the vault already holds the pair that ca-2 signed. The next
+	// phase 2 must file that pair under ca-2, because ca-2 signed it.
+	t.Run("a node that is behind keeps its pair under its signer", func(t *testing.T) {
+		path := "/etc/nebula/meshy-homelab/core-1.crt"
+		delete(nodes["core-1"].printsAfter, path)
+		rotateCert(nodes, "core-1", first)
+		rotateCertAfter(nodes, "core-1", second)
+		behind := record["core-1.crt"]
+
+		out, code := capture(t, func() int {
+			return run([]string{"ca", "rotate", "--phase", "2", "--mesh", dir})
+		})
+		if code != 0 {
+			t.Fatalf("phase 2 exit = %d, want 0: %s", code, out)
+		}
+
+		after := readVault(t, dir)
+		keptBehind, _, found := vault.Previous(after, "core-1", "ca-2")
+		if !found {
+			t.Fatalf("the vault filed the kept pair under %v, want ca-2",
+				vault.PreviousAuthorities(after, "core-1"))
+		}
+		if string(keptBehind) != string(behind) {
+			t.Error("the pair that the vault kept under ca-2 is not the pair that it held")
+		}
+		if old, _, found := vault.Previous(after, "core-1", "ca-1"); !found || string(old) != oldCore {
+			t.Error("the run moved the pair that ca-1 signed")
+		}
+		if kept := vault.PreviousAuthorities(after, "web-1"); len(kept) != 1 || kept[0] != "ca-1" {
+			t.Errorf("web-1 kept %v, want ca-1 alone", kept)
+		}
+	})
 }
 
 func readVault(t *testing.T, dir string) vault.Record {

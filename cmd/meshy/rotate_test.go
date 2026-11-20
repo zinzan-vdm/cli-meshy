@@ -389,6 +389,40 @@ func TestCARotatePhase2SignsEveryNodeWithTheNewAuthority(t *testing.T) {
 	}
 }
 
+func TestCARotatePhase2RefusesAKeptCertificateWithNoIssuer(t *testing.T) {
+	dir := rotatedMeshDir(t, "ca-1")
+	openRotateVault(t, dir, "core-1")
+	stubSigner(t)
+	t.Setenv("STUB_ISSUER", "")
+	t.Setenv("MESHY_KNOWN_HOSTS", filepath.Join(dir, "known_hosts"))
+	nodes := useFakes(t, "core-1")
+	rotateNode(nodes, "core-1", "ca-1", "ca-2")
+	rotateCert(nodes, "core-1", "the-old-authority")
+
+	out, errOut, code := captureBoth(t, func() int {
+		return run([]string{"ca", "rotate", "--phase", "2", "--mesh", dir})
+	})
+	if code != 1 {
+		t.Fatalf("exit = %d, want 1: %s%s", code, out, errOut)
+	}
+	if !strings.Contains(out, "names no issuer") {
+		t.Errorf("the report does not name the refusal:\n%s", out)
+	}
+
+	record := readVault(t, dir)
+	if kept := vault.PreviousAuthorities(record, "core-1"); len(kept) != 0 {
+		t.Errorf("the refused run kept a pair under %v, want none", kept)
+	}
+	cert, _, found := vault.Certificate(record, "core-1")
+	if !found || string(cert) != "core-1 certificate\n" {
+		t.Errorf("the vault holds %q, want the pair that it held before the run", cert)
+	}
+	if nodes["core-1"].writes != 0 || nodes["core-1"].reloads != 0 {
+		t.Errorf("core-1 saw %d writes and %d reloads, want none",
+			nodes["core-1"].writes, nodes["core-1"].reloads)
+	}
+}
+
 func TestCARotatePhase2ChangesOneLineOfMeshYml(t *testing.T) {
 	dir := rotatedMeshDir(t, "ca-1")
 	path := filepath.Join(dir, config.FileName)

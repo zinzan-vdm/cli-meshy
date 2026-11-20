@@ -617,14 +617,32 @@ func (r *rotateRun) rotateNode(ctx context.Context, mesh config.Mesh, target con
 		return report
 	}
 
-	// The certificate is signed from the new authority and sealed in the vault
-	// before the node sees it, so phase 3 and a later apply read the same pair.
-	networks, err := meshNetworks(mesh, target)
+	// The pair that the run replaces keeps the name of the authority that
+	// signed it. That authority can differ from the one on the node, because a
+	// node that an earlier run did not reach still holds the old certificate.
+	binary, err := r.tool()
 	if err != nil {
 		report.Error = reason(target, err)
 		return report
 	}
-	binary, err := r.tool()
+	previousCert, previousKey, previousFound := vault.Certificate(r.record, target.Name)
+	previousAuthority := ""
+	if previousFound {
+		kept, err := issue.Print(ctx, binary, previousCert)
+		if err != nil {
+			report.Error = reason(target, err)
+			return report
+		}
+		if strings.TrimSpace(kept.Issuer) == "" {
+			report.Error = fmt.Sprintf("the certificate that the vault holds for %s names no issuer", target.Name)
+			return report
+		}
+		previousAuthority = signerOf(signers, kept.Issuer)
+	}
+
+	// The certificate is signed from the new authority and sealed in the vault
+	// before the node sees it, so phase 3 and a later apply read the same pair.
+	networks, err := meshNetworks(mesh, target)
 	if err != nil {
 		report.Error = reason(target, err)
 		return report
@@ -643,8 +661,8 @@ func (r *rotateRun) rotateNode(ctx context.Context, mesh config.Mesh, target con
 		report.Error = reason(target, err)
 		return report
 	}
-	if cert, key, ok := vault.Certificate(r.record, target.Name); ok {
-		vault.KeepPrevious(r.record, target.Name, signerOf(signers, held.Issuer), cert, key)
+	if previousFound {
+		vault.KeepPrevious(r.record, target.Name, previousAuthority, previousCert, previousKey)
 	}
 	vault.SetCertificate(r.record, target.Name, signed.Cert, signed.Key)
 	r.changed = true
